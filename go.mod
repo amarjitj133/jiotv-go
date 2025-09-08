@@ -8,7 +8,7 @@ require (
 	github.com/madflojo/tasks v1.2.1
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v2 v2.27.7
-	golang.org/x/term v0.34.0
+	golang.org/x/term v0.35.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -41,6 +41,6 @@ require (
 	github.com/schollz/progressbar/v3 v3.18.0
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.65.0
-	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
