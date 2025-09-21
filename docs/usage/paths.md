@@ -55,9 +55,9 @@ This section provides information about the API endpoints that JioTV Go offers. 
 
 - **Path**: `/playlist.m3u`
 
-Instantly obtain an M3U playlist for IPTV.
+  Instantly obtain an M3U playlist for IPTV.
 
-(Redirects to `/channels?type=m3u` for your convenience.)
+  (Redirects to /channels?type=m3u for your convenience.)
 
 You can append `?q=<level>` to the path where `<level>` should be replaced with `low`, `medium`, `high`, or `l`, `m`, `h` to set the quality of the stream. The default quality is `auto`.
 
