@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -35,6 +36,45 @@ const (
 	PLAYER_USER_AGENT     = headers.UserAgentPlayTV
 	REQUEST_USER_AGENT    = headers.UserAgentOkHttp
 )
+
+// remainingFromHDNEA parses the hdnea token from URL and returns remaining seconds until expiration
+func remainingFromHDNEA(raw string) (int64, bool) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return 0, false
+	}
+	token := u.Query().Get("__hdnea__")
+	if token == "" {
+		return 0, false
+	}
+	var expStr string
+	parts := strings.Split(token, "~")
+	for _, p := range parts {
+		if strings.HasPrefix(p, "exp=") {
+			expStr = strings.TrimPrefix(p, "exp=")
+			break
+		}
+	}
+	if expStr == "" {
+		return 0, false
+	}
+	// exp is a unix timestamp (seconds)
+	// simple parse without extra allocations
+	var exp int64
+	for i := 0; i < len(expStr); i++ {
+		c := expStr[i]
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		exp = exp*10 + int64(c-'0')
+	}
+	now := time.Now().Unix()
+	remaining := exp - now
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining, true
+}
 
 // Init initializes the necessary operations required for the handlers to work.
 func Init() {
@@ -284,6 +324,32 @@ func RenderHandler(c *fiber.Ctx) error {
 		utils.Log.Println(err)
 		return err
 	}
+
+	// --- NEW: preemptive refresh if hdnea is close to expiring ---
+	if rem, ok := remainingFromHDNEA(decoded_url); ok && rem <= 20 {
+		channelID := c.Query("id")
+		if channelID == "" {
+			channelID = c.Query("channel_id")
+		}
+		if channelID == "" {
+			channelID = channel_id // fallback to channel_key_id
+		}
+		if channelID != "" {
+			tv := c.Locals("television").(*television.Television)
+			if tv == nil {
+				tv = TV // fallback to global TV instance
+			}
+			if out, err := tv.Live(channelID); err == nil && out != nil && out.Result != "" {
+				utils.SafeLogf("[RenderHandler] hdnea expiring in %ds; refreshed via Live()", rem)
+				decoded_url = out.Result
+			} else if err != nil {
+				utils.SafeLogf("[RenderHandler] refresh via Live() failed: %v (remaining=%ds)", err, rem)
+			}
+		} else {
+			utils.SafeLogf("[RenderHandler] hdnea expiring in %ds but channel id missing; skipping refresh", rem)
+		}
+	}
+	// --- END new block ---
 
 	renderResult, statusCode := TV.Render(decoded_url)
 

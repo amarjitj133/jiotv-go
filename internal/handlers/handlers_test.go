@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
@@ -626,4 +628,74 @@ func TestIsCustomChannel(t *testing.T) {
 	
 	// Clean up
 	config.Cfg.CustomChannelsFile = ""
+}
+
+func TestRemainingFromHDNEA(t *testing.T) {
+	// Get current time for testing
+	now := time.Now().Unix()
+	future := now + 30 // 30 seconds in the future
+	past := now - 10   // 10 seconds in the past
+
+	tests := []struct {
+		name              string
+		url               string
+		expectedRemaining int64
+		expectedOk        bool
+	}{
+		{
+			name:              "Valid hdnea token with future expiration",
+			url:               fmt.Sprintf("https://example.com/video.m3u8?__hdnea__=st=123~exp=%d~acl=/*", future),
+			expectedRemaining: 30,
+			expectedOk:        true,
+		},
+		{
+			name:              "Valid hdnea token with past expiration",
+			url:               fmt.Sprintf("https://example.com/video.m3u8?__hdnea__=st=123~exp=%d~acl=/*", past),
+			expectedRemaining: 0, // Should return 0 for expired tokens
+			expectedOk:        true,
+		},
+		{
+			name:              "URL without hdnea token",
+			url:               "https://example.com/video.m3u8?other=param",
+			expectedRemaining: 0,
+			expectedOk:        false,
+		},
+		{
+			name:              "hdnea token without exp parameter",
+			url:               "https://example.com/video.m3u8?__hdnea__=st=123~acl=/*",
+			expectedRemaining: 0,
+			expectedOk:        false,
+		},
+		{
+			name:              "Invalid URL",
+			url:               "not-a-valid-url",
+			expectedRemaining: 0,
+			expectedOk:        false,
+		},
+		{
+			name:              "hdnea token with non-numeric exp",
+			url:               "https://example.com/video.m3u8?__hdnea__=st=123~exp=invalid~acl=/*",
+			expectedRemaining: 0,
+			expectedOk:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			remaining, ok := remainingFromHDNEA(tt.url)
+			
+			if ok != tt.expectedOk {
+				t.Errorf("remainingFromHDNEA() ok = %v, expected %v", ok, tt.expectedOk)
+			}
+			
+			if tt.expectedOk {
+				// Allow for some time difference due to test execution time
+				if remaining < tt.expectedRemaining-2 || remaining > tt.expectedRemaining+2 {
+					t.Errorf("remainingFromHDNEA() remaining = %v, expected around %v", remaining, tt.expectedRemaining)
+				}
+			} else if remaining != tt.expectedRemaining {
+				t.Errorf("remainingFromHDNEA() remaining = %v, expected %v", remaining, tt.expectedRemaining)
+			}
+		})
+	}
 }
