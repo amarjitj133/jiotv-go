@@ -143,7 +143,10 @@ func isCustomChannel(channelID string) bool {
 // IndexHandler handles the index page for `/` route
 func IndexHandler(c *fiber.Ctx) error {
 	// Get all channels
-	channels := television.Channels()
+	channels, err := television.Channels()
+	if err != nil {
+		return ErrorMessageHandler(c, err)
+	}
 
 	// Get language and category from query params
 	language := c.Query("language")
@@ -492,7 +495,10 @@ func ChannelsHandler(c *fiber.Ctx) error {
 	splitCategory := strings.TrimSpace(c.Query("c"))
 	languages := strings.TrimSpace(c.Query("l"))
 	skipGenres := strings.TrimSpace(c.Query("sg"))
-	apiResponse := television.Channels()
+	apiResponse, err := television.Channels()
+	if err != nil {
+		return ErrorMessageHandler(c, err)
+	}
 	// hostUrl should be request URL like http://localhost:5001
 	hostURL := strings.ToLower(c.Protocol()) + "://" + c.Hostname()
 

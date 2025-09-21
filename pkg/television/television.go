@@ -346,7 +346,7 @@ func getCustomChannels() []Channel {
 }
 
 // Channels fetch channels from JioTV API and merge with custom channels
-func Channels() ChannelsResponse {
+func Channels() (ChannelsResponse, error) {
 	// Create a fasthttp.Client
 	client := utils.GetRequestClient()
 
@@ -368,7 +368,8 @@ func Channels() ChannelsResponse {
 		Headers: requestHeaders,
 	}, client)
 	if err != nil {
-		utils.Log.Panic(err)
+		utils.Log.Printf("Error fetching channels from JioTV API: %v", err)
+		return ChannelsResponse{}, err
 	}
 	defer fasthttp.ReleaseResponse(resp)
 
@@ -376,7 +377,8 @@ func Channels() ChannelsResponse {
 
 	// Parse JSON response
 	if err := utils.ParseJSONResponse(resp, &apiResponse); err != nil {
-		utils.Log.Panic(err)
+		utils.Log.Printf("Error parsing channels API response: %v", err)
+		return ChannelsResponse{}, err
 	}
 
 	// disable sony channels temporarily
@@ -388,7 +390,7 @@ func Channels() ChannelsResponse {
 		apiResponse.Result = append(apiResponse.Result, customChannels...)
 	}
 
-	return apiResponse
+	return apiResponse, nil
 }
 
 // FilterChannels Function is used to filter channels by language and category
