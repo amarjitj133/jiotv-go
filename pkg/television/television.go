@@ -163,7 +163,7 @@ func (tv *Television) Live(channelID string) (*LiveURLOutput, error) {
 	}
 
 	// Always use the v1.1 API endpoint
-	url := "https://" + JIOTV_API_DOMAIN + "/playback/apis/v1.1/geturl?langId=6"
+url := "https://" + JIOTV_API_DOMAIN + urls.PlaybackAPIPath
 	req.Header.Set(headers.AccessToken, tv.AccessToken)
 	req.SetRequestURI(url)
 	req.Header.SetMethod("POST")
