@@ -41,7 +41,6 @@ If you want to change your credentials, you can use the `login` command again. I
 #### COMMANDS
 
 - `otp`, `o`: Login with OTP
-- `password`, `p`: Login with Password
 - `reset`, `logout`, `lo`: Reset credentials. This will delete the existing credentials.
 - `help`, `h`: Shows a list of commands or help for one command
 
@@ -54,16 +53,6 @@ jiotv_go login otp
 #### DESCRIPTION
 
 The `otp` command helps you to login to JioTV Go with OTP. It will ask for your JioTV number and send an OTP to your number. You have to enter the OTP to login.
-
-### password (p)
-
-#### USAGE
-
-jiotv_go login password
-
-#### DESCRIPTION
-
-The `password` command helps you to login to JioTV Go with password. It will ask for your JioTV number and password to login.
 
 ### reset (logout, lo)
 

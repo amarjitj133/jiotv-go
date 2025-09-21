@@ -2,11 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/jiotv-go/jiotv_go/v3/pkg/utils"
-
-	"golang.org/x/term"
 )
 
 // Logout logs the user out by removing the saved login credentials file.
@@ -63,46 +60,4 @@ func LoginOTP() error {
 	}
 
 	return nil
-}
-
-// LoginPassword handles the login flow using password.
-// It takes the mobile number and password as input,
-// verifies the credentials by calling the Login API
-// and logs in the user if successful.
-// Returns any error encountered.
-func LoginPassword() error {
-	fmt.Print("Enter your number: +91 ")
-	var mobileNumber string
-	fmt.Scanln(&mobileNumber)
-
-	password, err := readPassword("Enter your password: ")
-	if err != nil {
-		return err
-	}
-
-	result, err := utils.Login(mobileNumber, password)
-	if err != nil {
-		return err
-	}
-
-	if result["status"] == "success" {
-		fmt.Println("Login successful")
-	} else {
-		fmt.Println("Login failed")
-	}
-
-	return nil
-}
-
-// readPassword prompts the user for a password input from stdin.
-// It prints the given prompt, reads the password while masking the input,
-// and returns the password as a string along with any error.
-func readPassword(prompt string) (string, error) {
-	fmt.Print(prompt)
-	password, err := term.ReadPassword(int(os.Stdin.Fd()))
-	if err != nil {
-		return "", err
-	}
-	fmt.Println() // Move to the next line after user input
-	return string(password), nil
 }

@@ -35,6 +35,5 @@ const (
 // URL path patterns (for string formatting)
 const (
 	// Playback URL patterns
-	PlaybackAPIPath = "/playback/apis/v1/geturl?langId=6"
-	ChannelURLPath  = "/apis/v2.2/getchannelurl/getchannelurl"
+	PlaybackAPIPath = "/playback/apis/v1.1/geturl?langId=6"
 )

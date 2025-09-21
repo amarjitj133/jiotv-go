@@ -37,23 +37,17 @@ This section provides information about the API endpoints that JioTV Go offers. 
 ### Send OTP
 
 - **Path**: `/login/sendOTP`
-Request an OTP to log in to JioTV.
+  Request an OTP to log in to JioTV.
 
 ### Verify OTP
 
 - **Path**: `/login/verifyOTP`
-Verify the OTP and log in to JioTV.
-
-### Login with Password
-
-- **Path**: `/login`
-Log in to JioTV with password authentication. Either pass the `username` and `password` as query parameters or as JSON in the post request body.
+  Verify the OTP and log in to JioTV.
 
 ### Get Channels data
 
 - **Path**: `/channels`
-Discover the complete list of available channels in JSON format.
-  
+  Discover the complete list of available channels in JSON format.
 
 ## TV Endpoints
 
@@ -61,10 +55,10 @@ Discover the complete list of available channels in JSON format.
 
 - **Path**: `/playlist.m3u`
 
-Instantly obtain an M3U playlist for IPTV. 
- 
-(Redirects to `/channels?type=m3u` for your convenience.) 
-  
+Instantly obtain an M3U playlist for IPTV.
+
+(Redirects to `/channels?type=m3u` for your convenience.)
+
 You can append `?q=<level>` to the path where `<level>` should be replaced with `low`, `medium`, `high`, or `l`, `m`, `h` to set the quality of the stream. The default quality is `auto`.
 
 You can also append `&c=split` to the path to have categories based on both language and genre. Example categories: `Hindi - Entertainment`, `English - News`, `Tamil - Sports`, etc.
@@ -89,6 +83,5 @@ M3U8 stream file for the specified `channel_id`.
 - **Path**: `/live/:quality/:channel_id`
 
 M3U8 stream file for the specified `channel_id` with the specified `quality`. The `quality` can be `low`, `medium`, `high`, or `l`, `m`, `h`.
-
 
 Explore these paths and endpoints to access the features and content offered by JioTV Go. They provide the foundation for interacting with the application and enjoying the available channels and streams.

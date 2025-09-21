@@ -12,19 +12,6 @@ type JIOTV_CREDENTIALS struct {
 	LastSSOTokenRefreshTime string `json:"lastSSOTokenRefreshTime"`
 }
 
-// LoginPasswordPayload represents Request payload for password based login
-type LoginPasswordPayload struct {
-	// Username or phone number of the Jio account
-	Identifier string `json:"identifier"`
-	// Password of the Jio account
-	Password string `json:"password"`
-	// Remember user after login
-	RememberUser         string                 `json:"rememberUser"`
-	UpgradeAuth          string                 `json:"upgradeAuth"`
-	ReturnSessionDetails string                 `json:"returnSessionDetails"`
-	DeviceInfo           LoginPayloadDeviceInfo `json:"deviceInfo"`
-}
-
 // LoginOTPPayload represents Request payload for OTP based login
 type LoginOTPPayload struct {
 	Number     string                 `json:"number"`

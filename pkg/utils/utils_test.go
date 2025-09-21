@@ -135,49 +135,6 @@ func TestLoginVerifyOTP(t *testing.T) {
 	}
 }
 
-func TestLogin(t *testing.T) {
-
-	type args struct {
-		username string
-		password string
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		{
-			name: "Empty credentials",
-			args: args{
-				username: "",
-				password: "",
-			},
-			wantErr: true,
-		},
-		{
-			name: "Valid credentials",
-			args: args{
-				username: "test@example.com",
-				password: "testpassword",
-			},
-			wantErr: false,
-		},
-		{
-			name: "Valid phone number credentials",
-			args: args{
-				username: "1234567890",
-				password: "testpassword",
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// TODO
-		})
-	}
-}
-
 func TestGetPathPrefix(t *testing.T) {
 	setupTest() // Initialize store
 	tests := []struct {

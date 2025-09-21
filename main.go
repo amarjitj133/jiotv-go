@@ -142,15 +142,6 @@ func main() {
 						},
 					},
 					{
-						Name:        "password",
-						Aliases:     []string{"p"},
-						Usage:       "Login using password",
-						Description: "The password command logs you in using password. It will ask for your username and password, and login using that.",
-						Action: func(c *cli.Context) error {
-							return cmd.LoginPassword()
-						},
-					},
-					{
 						Name:        "reset",
 						Aliases:     []string{"lo", "logout"},
 						Usage:       "Logout",

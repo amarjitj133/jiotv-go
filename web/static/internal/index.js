@@ -1,6 +1,6 @@
 const search = (searchTerm) => {
   const channels = document.querySelectorAll('.card');
-  
+
   // Update URL search parameter
   updateUrlParameter('search', searchTerm);
 
@@ -35,35 +35,7 @@ const init = () => {
 // Call the init function to start the process
 init();
 
-const loginClick = () => {
-  const elements = safeGetElementsById(["username", "password"]);
-  const { username: usernameElement, password: passwordElement } = elements;
-  
-  if (!usernameElement || !passwordElement) {
-    return;
-  }
 
-  const username = usernameElement.value;
-  const password = passwordElement.value;
-  
-  if (!username || !password) {
-    return;
-  }
-
-  postJSON("/login", { username, password })
-    .then((data) => {
-      if (data.status === "success") {
-        alert("Login success. Enjoy!");
-        document.location.reload();
-      } else {
-        alert("Login failed!");
-      }
-    })
-    .catch((err) => {
-      console.log(err);
-      alert("Login failed!");
-    });
-};
 
 const loginOTPClick = () => {
   const numberElement = safeGetElementById("number");
@@ -93,14 +65,14 @@ const loginOTPClick = () => {
 const loginOTPVerifyClick = () => {
   const elements = safeGetElementsById(["number", "otp"]);
   const { number: numberElement, otp: otpElement } = elements;
-  
+
   if (!numberElement || !otpElement) {
     return;
   }
 
   const number = numberElement.value;
   const otp = otpElement.value;
-  
+
   if (!number || !otp) {
     return;
   }

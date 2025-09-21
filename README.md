@@ -6,7 +6,7 @@ Ready to dive in? Download the latest binary for your operating system from [her
 
 _Give us 🌟 on GitHub if you like this project!_
 
-We have video tutorials for [Windows](https://youtu.be/BnNTYTSvVBc),  and [Android](https://youtu.be/ejiuml11g8o) users. Please watch them if you are unsure about the installation process.
+We have video tutorials for [Windows](https://youtu.be/BnNTYTSvVBc), and [Android](https://youtu.be/ejiuml11g8o) users. Please watch them if you are unsure about the installation process.
 
 ## Features 🌟
 
@@ -16,7 +16,7 @@ We have video tutorials for [Windows](https://youtu.be/BnNTYTSvVBc),  and [Andro
 - 📅 EPG (Electronic Program Guide) support in compressed GZipped XML or JSON format.
 - 🎥 Quality selection (Low, Medium, High) supported.
 - ⚙️ Configurable port and host.
-- 🔐 Authentication options using Jio ID/Number with password or Jio number with OTP.
+- 🔐 Authentication using Jio number with OTP.
 - 👥 Support for multiple clients simultaneously.
 - 🚀 Written in Go, ensuring it's fast, lightweight, and portable.
 - 💻 Command-line interface for server management and self-update.

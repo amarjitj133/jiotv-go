@@ -116,7 +116,7 @@ func LoginSendOTP(number string) (bool, error) {
 
 	// Make the request
 	url := "https://" + JIOTV_API_DOMAIN + "/userservice/apis/v1/loginotp/send"
-	
+
 	requestHeaders := map[string]string{
 		"appname":    "RJIL_JioTV",
 		"os":         "android",
@@ -161,7 +161,7 @@ func LoginVerifyOTP(number, otp string) (map[string]string, error) {
 
 	// Make the request
 	url := "https://" + JIOTV_API_DOMAIN + "/userservice/apis/v1/loginotp/verify"
-	
+
 	requestHeaders := map[string]string{
 		"appname":    "RJIL_JioTV",
 		"os":         "android",
@@ -217,96 +217,6 @@ func LoginVerifyOTP(number, otp string) (map[string]string, error) {
 	}
 }
 
-// Login is used to login with username and password
-func Login(username, password string) (map[string]string, error) {
-	postData := map[string]string{
-		"username": username,
-		"password": password,
-	}
-
-	// Process the username
-	u := postData["username"]
-	var user string
-	if strings.Contains(u, "@") {
-		user = u
-	} else {
-		user = "+91" + u
-	}
-
-	passw := postData["password"]
-
-	// Set headers
-	headerMap := map[string]string{
-		headers.XAPIKey:     headers.APIKeyJio,
-		headers.ContentType: headers.ContentTypeJSON,
-	}
-
-	// Construct payload
-	payload := LoginPasswordPayload{
-		Identifier:           user,
-		Password:             passw,
-		RememberUser:         "T",
-		UpgradeAuth:          "Y",
-		ReturnSessionDetails: "T",
-		DeviceInfo: LoginPayloadDeviceInfo{
-			ConsumptionDeviceName: "Jio",
-			Info: LoginPayloadDeviceInfoInfo{
-				Type: "android",
-				Platform: LoginPayloadDeviceInfoInfoPlatform{
-					Name:    "vbox86p",
-					Version: "8.0.0",
-				},
-				AndroidID: GetDeviceID(),
-			},
-		},
-	}
-
-	// Make the request
-	url := "https://" + API_JIO_DOMAIN + "/v3/dip/user/unpw/verify"
-	
-	client := &fasthttp.Client{}
-	resp, err := MakeJSONRequest(url, "POST", payload, headerMap, client)
-	if err != nil {
-		return nil, err
-	}
-	defer fasthttp.ReleaseResponse(resp)
-
-	// Check the response status code
-	if resp.StatusCode() != fasthttp.StatusOK {
-		return nil, fmt.Errorf("request failed with status code: %d", resp.StatusCode())
-	}
-
-	var result LoginResponse
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, err
-	}
-
-	ssoToken := result.SSOToken
-	if ssoToken != "" {
-		crm := result.SessionAttributes.User.SubscriberID
-		uniqueId := result.SessionAttributes.User.Unique
-
-		WriteJIOTVCredentials(&JIOTV_CREDENTIALS{
-			SSOToken:    ssoToken,
-			CRM:         crm,
-			UniqueID:    uniqueId,
-			AccessToken: "",
-		})
-
-		return map[string]string{
-			"status":   "success",
-			"ssoToken": ssoToken,
-			"crm":      crm,
-			"uniqueId": uniqueId,
-		}, nil
-	} else {
-		return map[string]string{
-			"status":  "failed",
-			"message": "Invalid credentials",
-		}, nil
-	}
-}
-
 // GetPathPrefix alias for store.GetPathPrefix
 func GetPathPrefix() string {
 	return store.GetPathPrefix()
@@ -352,19 +262,19 @@ func GetJIOTVCredentials() (*JIOTV_CREDENTIALS, error) {
 		return nil, err
 	}
 
-	// Empty for Password login
+	// Required for OTP login
 	accessToken, err := store.Get("accessToken")
 	if err != nil {
 		return nil, nil
 	}
 
-	// Empty for Password login
+	// Required for OTP login
 	refreshToken, err := store.Get("refreshToken")
 	if err != nil {
 		return nil, nil
 	}
 
-	// Empty for Password login
+	// Required for OTP login
 	lastTokenRefreshTime, err := store.Get("lastTokenRefreshTime")
 	if err != nil {
 		return nil, nil
@@ -602,8 +512,8 @@ func GenerateRandomString() error {
 }
 
 func BuildHLSPlayURL(quality, channelID string) string {
-    if quality != "" {
-        return fmt.Sprintf("/live/%s/%s.m3u8", quality, channelID)
-    }
-    return fmt.Sprintf("/live/%s.m3u8", channelID)
+	if quality != "" {
+		return fmt.Sprintf("/live/%s/%s.m3u8", quality, channelID)
+	}
+	return fmt.Sprintf("/live/%s.m3u8", channelID)
 }

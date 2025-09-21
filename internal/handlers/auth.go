@@ -163,44 +163,6 @@ func LoginVerifyOTPHandler(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-// LoginPasswordHandler is used to login with password
-func LoginPasswordHandler(c *fiber.Ctx) error {
-	var username, password string
-	if c.Method() == "GET" {
-		username = c.Query("username")
-		if err := internalUtils.CheckFieldExist(c, "Username", username != ""); err != nil {
-			return err
-		}
-		password = c.Query("password")
-		if err := internalUtils.CheckFieldExist(c, "Password", password != ""); err != nil {
-			return err
-		}
-	} else if c.Method() == "POST" {
-		formBody := new(LoginRequestBodyData)
-		err := c.BodyParser(&formBody)
-		if err != nil {
-			utils.Log.Println(err)
-			return internalUtils.BadRequestError(c, "Invalid JSON")
-		}
-		username = formBody.Username
-		if err := internalUtils.CheckFieldExist(c, "Username", username != ""); err != nil {
-			return err
-		}
-		password = formBody.Password
-		if err := internalUtils.CheckFieldExist(c, "Password", password != ""); err != nil {
-			return err
-		}
-	}
-
-	result, err := utils.Login(username, password)
-	if err != nil {
-		utils.Log.Println(err)
-		return internalUtils.InternalServerError(c, "Internal server error")
-	}
-	Init()
-	return c.JSON(result)
-}
-
 // LogoutHandler is used to logout
 func LogoutHandler(c *fiber.Ctx) error {
 	if !isLogoutDisabled {

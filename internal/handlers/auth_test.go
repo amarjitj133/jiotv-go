@@ -47,26 +47,6 @@ func TestLoginVerifyOTPHandler(t *testing.T) {
 	}
 }
 
-func TestLoginPasswordHandler(t *testing.T) {
-	type args struct {
-		c *fiber.Ctx
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		// No test cases - authentication handler
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := LoginPasswordHandler(tt.args.c); (err != nil) != tt.wantErr {
-				t.Errorf("LoginPasswordHandler() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestLogoutHandler(t *testing.T) {
 	type args struct {
 		c *fiber.Ctx
