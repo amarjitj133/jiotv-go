@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/valyala/fasthttp"
 	"github.com/jiotv-go/jiotv_go/v3/internal/config"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/television"
+	"github.com/valyala/fasthttp"
 )
 
 // createMockFiberContext creates a mock Fiber context for testing
@@ -567,7 +567,7 @@ func TestIsCustomChannel(t *testing.T) {
 	// Setup test config with custom channels file
 	tempDir := t.TempDir()
 	customChannelsFile := filepath.Join(tempDir, "test_custom_channels.json")
-	
+
 	// Create a test custom channels file
 	customChannelsData := map[string]interface{}{
 		"channels": []map[string]interface{}{
@@ -582,39 +582,39 @@ func TestIsCustomChannel(t *testing.T) {
 			},
 		},
 	}
-	
+
 	jsonData, _ := json.Marshal(customChannelsData)
 	err := os.WriteFile(customChannelsFile, jsonData, 0644)
 	if err != nil {
 		t.Fatalf("Failed to create test custom channels file: %v", err)
 	}
-	
+
 	// Initialize config
 	config.Cfg.CustomChannelsFile = customChannelsFile
 	television.InitCustomChannels()
-	
+
 	tests := []struct {
-		name     string
+		name      string
 		channelID string
 		expected  bool
 	}{
 		{
-			name:     "Custom channel with cc_ prefix",
+			name:      "Custom channel with cc_ prefix",
 			channelID: "cc_custom1",
 			expected:  true,
 		},
 		{
-			name:     "Regular JioTV channel",
+			name:      "Regular JioTV channel",
 			channelID: "1234",
 			expected:  false,
 		},
 		{
-			name:     "Non-existent custom channel",
+			name:      "Non-existent custom channel",
 			channelID: "cc_nonexistent",
 			expected:  false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := isCustomChannel(tt.channelID)
@@ -623,7 +623,7 @@ func TestIsCustomChannel(t *testing.T) {
 			}
 		})
 	}
-	
+
 	// Clean up
 	config.Cfg.CustomChannelsFile = ""
 }

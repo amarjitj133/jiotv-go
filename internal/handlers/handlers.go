@@ -255,17 +255,17 @@ func LiveQualityHandler(c *fiber.Ctx) error {
 	if id == "1349" || id == "1322" {
 		quality = "auto"
 	}
-	
+
 	// select quality level based on query parameter
 	liveURL := internalUtils.SelectQuality(quality, Bitrates.Auto, Bitrates.High, Bitrates.Medium, Bitrates.Low)
-	
+
 	// quote url as it will be passed as a query parameter
 	coded_url, err := secureurl.EncryptURL(liveURL)
 	if err != nil {
 		utils.Log.Println(err)
 		return internalUtils.ForbiddenError(c, err)
 	}
-	return c.Redirect("/render.m3u8?auth="+coded_url+"&channel_key_id="+id, fiber.StatusFound)
+	return c.Redirect("/render.m3u8?auth="+coded_url+"&channel_key_id="+id+"&q="+quality, fiber.StatusFound)
 }
 
 // RenderHandler handles M3U8 file for modification
@@ -292,13 +292,13 @@ func RenderHandler(c *fiber.Ctx) error {
 
 	// If we get a 403 (Forbidden), try refreshing tokens and retry once
 	if statusCode == fiber.StatusForbidden {
-		if err := EnsureFreshTokens(); err != nil {
-			utils.Log.Printf("Failed to refresh tokens after 403: %v", err)
+		quality := c.Query("q")
+		if quality == "" {
+			c.Redirect("/live/"+channel_id, fiber.StatusFound)
 		} else {
-			// Retry the request once after refreshing tokens
-			utils.Log.Println("Retrying render request after token refresh")
-			renderResult, statusCode = TV.Render(decoded_url)
+			c.Redirect("/live/"+quality+"/"+channel_id, fiber.StatusFound)
 		}
+		return nil
 	}
 	// baseUrl is the part of the url excluding suffix file.m3u8 and params is the part of the url after the suffix
 	split_url_by_params := strings.Split(decoded_url, "?")
@@ -315,7 +315,7 @@ func RenderHandler(c *fiber.Ctx) error {
 	replacer := func(match []byte) []byte {
 		switch {
 		case bytes.HasSuffix(match, []byte(".m3u8")):
-			return television.ReplaceM3U8(baseUrl, match, params, channel_id)
+			return television.ReplaceM3U8(baseUrl, match, params, channel_id, c.Query("q"))
 		case bytes.HasSuffix(match, []byte(".ts")):
 			return television.ReplaceTS(baseUrl, match, params)
 		case bytes.HasSuffix(match, []byte(".aac")):

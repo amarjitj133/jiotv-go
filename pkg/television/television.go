@@ -452,13 +452,14 @@ func FilterChannelsByDefaults(channels []Channel, categories, languages []int) [
 	return filteredChannels
 }
 
-func ReplaceM3U8(baseUrl, match []byte, params, channel_id string) []byte {
+func ReplaceM3U8(baseUrl, match []byte, params, channel_id string, quality string) []byte {
 	config := EncryptedURLConfig{
 		BaseURL:     string(baseUrl),
 		Match:       string(match),
 		Params:      params,
 		ChannelID:   channel_id,
 		EndpointURL: "/render.m3u8",
+		Quality:   quality,
 	}
 
 	result, err := CreateEncryptedURL(config)
