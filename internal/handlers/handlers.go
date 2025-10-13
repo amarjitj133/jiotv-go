@@ -549,8 +549,16 @@ func ChannelsHandler(c *fiber.Ctx) error {
 			default:
 				groupTitle = television.CategoryMap[channel.Category]
 			}
-			m3uContent += fmt.Sprintf("#EXTINF:-1 tvg-id=%q tvg-name=%q tvg-logo=%q tvg-language=%q tvg-type=%q group-title=%q, %s\n%s\n",
-				channel.ID, channel.Name, channelLogoURL, television.LanguageMap[channel.Language], television.CategoryMap[channel.Category], groupTitle, channel.Name, channelURL)
+
+			// Add catchup attributes for non-custom channels
+			catchupAttrs := ""
+			if !strings.HasPrefix(channel.ID, "cc_") && !strings.HasPrefix(channel.ID, "sl") {
+				catchupSource := fmt.Sprintf("%s/catchup/%s?start={utc}&end={utcend}", hostURL, channel.ID)
+				catchupAttrs = fmt.Sprintf(" catchup=\"default\" catchup-days=\"7\" catchup-source=%q", catchupSource)
+			}
+
+			m3uContent += fmt.Sprintf("#EXTINF:-1 tvg-id=%q tvg-name=%q tvg-logo=%q tvg-language=%q tvg-type=%q group-title=%q%s, %s\n%s\n",
+				channel.ID, channel.Name, channelLogoURL, television.LanguageMap[channel.Language], television.CategoryMap[channel.Category], groupTitle, catchupAttrs, channel.Name, channelURL)
 		}
 
 		// Set the Content-Disposition header for file download
@@ -612,11 +620,57 @@ func PlayHandler(c *fiber.Ctx) error {
 	})
 }
 
+// EPGViewerHandler loads the new EPG viewer with horizontal scrolling cards
+func EPGViewerHandler(c *fiber.Ctx) error {
+	id := c.Params("id")
+
+	// Get channel information
+	channels, err := television.Channels()
+	if err != nil {
+		return ErrorMessageHandler(c, err)
+	}
+
+	// Find channel name
+	channelName := "Channel " + id
+	for _, channel := range channels.Result {
+		if channel.ID == id {
+			channelName = channel.Name
+			break
+		}
+	}
+
+	internalUtils.SetCacheHeader(c, 3600)
+	return c.Render("views/epg_viewer", fiber.Map{
+		"Title":       Title,
+		"ChannelID":   id,
+		"ChannelName": channelName,
+	})
+}
+
 // PlayerHandler loads Web Player to stream live TV
 func PlayerHandler(c *fiber.Ctx) error {
 	id := c.Params("id")
 	quality := c.Query("q")
-	play_url := utils.BuildHLSPlayURL(quality, id)
+
+	// Check if this is a catchup request
+	isCatchup := c.Query("catchup") == "true"
+	startTime := c.Query("start")
+	endTime := c.Query("end")
+
+	var play_url string
+
+	if isCatchup && startTime != "" {
+		// Build catchup URL
+		if quality != "" && quality != "auto" {
+			play_url = utils.BuildCatchupPlayURL(quality, id, startTime, endTime)
+		} else {
+			play_url = utils.BuildCatchupPlayURL("", id, startTime, endTime)
+		}
+	} else {
+		// Build regular HLS URL
+		play_url = utils.BuildHLSPlayURL(quality, id)
+	}
+
 	internalUtils.SetCacheHeader(c, 3600)
 	return c.Render("views/player_hls", fiber.Map{
 		"play_url": play_url,

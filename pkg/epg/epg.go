@@ -236,6 +236,54 @@ func formatTime(t time.Time) string {
 	return t.Format("20060102150405 -0700")
 }
 
+// FetchEPGForChannel fetches EPG data for a specific channel and offset
+func FetchEPGForChannel(channelID int, offset int) (*EPGResponse, error) {
+	client := utils.GetRequestClient()
+
+	req := fasthttp.AcquireRequest()
+	req.Header.SetUserAgent(headers.UserAgentOkHttp)
+	defer fasthttp.ReleaseRequest(req)
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	reqURL := fmt.Sprintf(EPG_URL, offset, channelID)
+	req.SetRequestURI(reqURL)
+
+	if err := client.Do(req, resp); err != nil {
+		return nil, fmt.Errorf("error fetching EPG for channel %d: %v", channelID, err)
+	}
+
+	var epgResponse EPGResponse
+	if err := json.Unmarshal(resp.Body(), &epgResponse); err != nil {
+		return nil, fmt.Errorf("error unmarshaling EPG response for channel %d: %v", channelID, err)
+	}
+
+	return &epgResponse, nil
+}
+
+// FindShowByTime finds a show in the EPG that matches the given start time (with tolerance)
+// startTime is in Unix epoch milliseconds
+func FindShowByTime(channelID int, startTime int64) (*EPGObject, error) {
+	// Try current day (offset 0) and previous day (offset -1)
+	for offset := 0; offset >= -1; offset-- {
+		epgResponse, err := FetchEPGForChannel(channelID, offset)
+		if err != nil {
+			continue
+		}
+
+		// Look for a show that matches the start time (with 5 minute tolerance)
+		tolerance := int64(5 * 60 * 1000) // 5 minutes in milliseconds
+		for _, show := range epgResponse.EPG {
+			if show.StartEpoch >= startTime-tolerance && show.StartEpoch <= startTime+tolerance {
+				return &show, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no show found for channel %d at time %d", channelID, startTime)
+}
+
 // GenXMLGz generates XML EPG from JioTV API and writes it to a compressed gzip file.
 func GenXMLGz(filename string) error {
 	utils.Log.Println("Generating XML")

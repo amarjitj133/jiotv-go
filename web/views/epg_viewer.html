@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .ChannelName }} - EPG Viewer</title>
+    {{ template "styling" . }}
+    <style>
+        .epg-viewer-container { padding: 20px; max-width: 100%; margin: 0 auto; }
+        .day-selector { display: flex; gap: 10px; overflow-x: auto; padding: 10px 0; margin-bottom: 20px; scrollbar-width: thin; }
+        .day-item {
+            flex: 0 0 70px;
+            padding: 12px 8px;
+            border-radius: 8px;
+            text-align: center;
+            background-color: var(--fallback-b2,oklch(var(--b2)/var(--tw-bg-opacity)));
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .day-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .day-item.active {
+            background-color: var(--fallback-p,oklch(var(--p)/var(--tw-bg-opacity)));
+            color: white;
+            border-color: var(--fallback-pc,oklch(var(--pc)/var(--tw-bg-opacity)));
+        }
+        .day-name { display: block; font-size: 0.75rem; opacity: 0.8; }
+        .day-num { display: block; font-size: 1.25rem; font-weight: 600; margin-top: 4px; }
+
+        .programs-slider { overflow-x: auto; padding: 20px 10px; scrollbar-width: thin; }
+        .programs-track { display: flex; gap: 20px; min-height: 350px; align-items: stretch; }
+        .program-card {
+            flex: 0 0 280px;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--fallback-b2,oklch(var(--b2)/var(--tw-bg-opacity)));
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .program-card:hover {
+            border-color: var(--fallback-p,oklch(var(--p)/var(--tw-bg-opacity)));
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }
+        .program-card.current-program {
+            border-color: var(--fallback-er,oklch(var(--er)/var(--tw-border-opacity)));
+            transform: scale(1.02);
+        }
+        .program-poster {
+            width: 100%;
+            height: 160px;
+            object-fit: cover;
+            pointer-events: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .live-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: var(--fallback-er,oklch(var(--er)/var(--tw-bg-opacity)));
+            color: white;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .7; }
+        }
+        .program-info {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            pointer-events: none;
+        }
+        .program-time {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--fallback-p,oklch(var(--p)/var(--tw-text-opacity)));
+            margin-bottom: 8px;
+        }
+        .program-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            line-height: 1.4;
+        }
+        .program-description {
+            font-size: 0.875rem;
+            opacity: 0.7;
+            margin-top: auto;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .program-category {
+            display: inline-block;
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background-color: var(--fallback-b3,oklch(var(--b3)/var(--tw-bg-opacity)));
+            margin-top: 8px;
+        }
+
+        .player-section {
+            margin-top: 30px;
+            background-color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            display: none;
+        }
+        .player-section.active { display: block; }
+        .player-section video {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16/9;
+        }
+
+        .loading-spinner {
+            text-align: center;
+            padding: 40px;
+            width: 100%;
+        }
+        .loading-spinner::after {
+            content: "";
+            width: 40px;
+            height: 40px;
+            margin: 0 auto;
+            border: 4px solid var(--fallback-b3,oklch(var(--b3)/var(--tw-border-opacity)));
+            border-top-color: var(--fallback-p,oklch(var(--p)/var(--tw-border-opacity)));
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: block;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+    <link rel="stylesheet" href="/static/external/flowplayer.css" />
+</head>
+<body>
+    {{ template "navbar" . }}
+    <div class="epg-viewer-container">
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold mb-2">{{ .ChannelName }}</h1>
+            <a href="/" class="btn btn-sm btn-ghost">&larr; Back to Channels</a>
+        </div>
+
+        <!-- Day Selector -->
+        <div class="day-selector" id="daySelector">
+            <!-- Will be populated by JavaScript -->
+        </div>
+
+        <!-- Programs Slider -->
+        <div class="programs-slider" id="programsSlider">
+            <div class="programs-track" id="programsTrack">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+
+        <!-- Player Section -->
+        <div class="player-section" id="playerSection">
+            <div id="playerContainer"></div>
+        </div>
+    </div>
+
+    <script src="/static/external/flowplayer.min.js"></script>
+    <script src="/static/external/hls.min.js"></script>
+    <script src="/static/external/qsel.min.js"></script>
+    <script src="/static/external/asel.min.js"></script>
+    <script src="/static/external/keyboard.min.js"></script>
+    <script src="/static/internal/utils.js"></script>
+    <script src="/static/internal/common.js"></script>
+    <script>
+        const channelId = {{ .ChannelID }};
+        let currentPlayer = null;
+
+        // Generate date range (7 days back to today)
+        function generateDates() {
+            const dates = [];
+            const today = new Date();
+            for (let i = 0; i <= 7; i++) {
+                const date = new Date(today);
+                date.setDate(today.getDate() - i);
+                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                dates.push({
+                    offset: -i,
+                    day_name: i === 0 ? 'Today' : (i === 1 ? 'Yesterday' : dayNames[date.getDay()]),
+                    day_num: date.getDate(),
+                    month: date.getMonth(),
+                    year: date.getFullYear()
+                });
+            }
+            return dates;
+        }
+
+        // Render day selector
+        function renderDaySelector() {
+            const daySelector = document.getElementById('daySelector');
+            const dates = generateDates();
+            daySelector.innerHTML = dates.map(date => `
+                <div class="day-item ${date.offset === 0 ? 'active' : ''}" data-offset="${date.offset}">
+                    <span class="day-name">${date.day_name}</span>
+                    <span class="day-num">${date.day_num}</span>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            daySelector.querySelectorAll('.day-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    daySelector.querySelectorAll('.day-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                    const offset = parseInt(item.dataset.offset);
+                    loadEPGForDay(offset);
+                });
+            });
+        }
+
+        // Format epoch to time
+        function formatTime(epoch) {
+            const date = new Date(epoch);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+
+        // Check if program is current
+        function isCurrentProgram(startEpoch, endEpoch) {
+            const now = Date.now();
+            return now >= startEpoch && now < endEpoch;
+        }
+
+        // Render programs
+        function renderPrograms(programs) {
+            const track = document.getElementById('programsTrack');
+            if (!programs || programs.length === 0) {
+                track.innerHTML = '<p class="text-center w-full">No programs available.</p>';
+                return;
+            }
+
+            track.innerHTML = programs.map(program => {
+                const isCurrent = isCurrentProgram(program.startEpoch, program.endEpoch);
+                const posterUrl = `/jtvposter/${program.episodePoster}`;
+                return `
+                    <article class="program-card ${isCurrent ? 'current-program' : ''}"
+                             data-srno="${program.srno}"
+                             data-showid="${program.showId}"
+                             data-showtime="${program.showtime}"
+                             data-start="${program.startEpoch}"
+                             data-end="${program.endEpoch}"
+                             data-is-current="${isCurrent}">
+                        ${isCurrent ? '<div class="live-badge">LIVE</div>' : ''}
+                        <img src="${posterUrl}" alt="${program.showname}" class="program-poster"
+                             onerror="this.style.display='none'">
+                        <div class="program-info">
+                            <div class="program-time">${formatTime(program.startEpoch)} - ${formatTime(program.endEpoch)}</div>
+                            <h3 class="program-title">${program.showname}</h3>
+                            <p class="program-description">${program.description || ''}</p>
+                            ${program.showCategory ? `<span class="program-category">${program.showCategory}</span>` : ''}
+                        </div>
+                    </article>
+                `;
+            }).join('');
+
+            // Add click handlers
+            track.querySelectorAll('.program-card').forEach(card => {
+                card.addEventListener('click', () => playProgram(card));
+            });
+
+            // Scroll to current program
+            const currentCard = track.querySelector('.current-program');
+            if (currentCard) {
+                setTimeout(() => {
+                    currentCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                }, 100);
+            }
+        }
+
+        // Load EPG for specific day
+        async function loadEPGForDay(offset) {
+            const track = document.getElementById('programsTrack');
+            track.innerHTML = '<div class="loading-spinner"></div>';
+
+            try {
+                const response = await fetch(`/epg/${channelId}/${offset}`);
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                const data = await response.json();
+                renderPrograms(data.epg);
+            } catch (error) {
+                console.error('Failed to load EPG:', error);
+                track.innerHTML = '<p class="text-center w-full text-error">Failed to load EPG. Please try again.</p>';
+            }
+        }
+
+        // Play program (live or catchup)
+        async function playProgram(card) {
+            const isCurrent = card.dataset.isCurrent === 'true';
+            const streamType = isCurrent ? 'Seek' : 'Catchup';
+
+            // Build form data for the API
+            const formData = {
+                channel_id: channelId,
+                stream_type: streamType,
+                srno: card.dataset.srno,
+                showId: card.dataset.showid
+            };
+
+            if (!isCurrent) {
+                formData.begin = parseInt(card.dataset.start);
+                formData.end = parseInt(card.dataset.end);
+                formData.showtime = parseInt(card.dataset.start);
+                formData.programId = card.dataset.showid;
+            }
+
+            // Show player section
+            const playerSection = document.getElementById('playerSection');
+            const playerContainer = document.getElementById('playerContainer');
+            playerSection.classList.add('active');
+
+            // Destroy existing player
+            if (currentPlayer) {
+                currentPlayer.destroy();
+                currentPlayer = null;
+            }
+
+            try {
+                // Get stream URL from our catchup API
+                let streamUrl;
+                if (isCurrent) {
+                    streamUrl = `/live/${channelId}.m3u8`;
+                } else {
+                    // Build catchup URL with EPG metadata for reliability
+                    streamUrl = `/catchup/${channelId}?start=${Math.floor(formData.begin / 1000)}&end=${Math.floor(formData.end / 1000)}&srno=${formData.srno}&showId=${formData.showId}`;
+                }
+
+                // Initialize Flowplayer
+                playerContainer.innerHTML = '';
+                currentPlayer = flowplayer(playerContainer, {
+                    src: streamUrl,
+                    autoplay: true,
+                    live: isCurrent,
+                    seekable: !isCurrent,
+                    retry: true,
+                    qsel: {},
+                    asel: {},
+                    ui: flowplayer.ui.USE_THIN_CONTROLBAR
+                });
+
+                // Scroll player into view
+                playerSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } catch (error) {
+                console.error('Failed to play stream:', error);
+                alert('Failed to load stream. Please try again.');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            renderDaySelector();
+            loadEPGForDay(0);
+        });
+    </script>
+    {{ template "footer" . }}
+</body>
+</html>

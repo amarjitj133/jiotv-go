@@ -89,6 +89,9 @@ type EPGObject struct {
 	Title        string `json:"showname"`         // Title of the show
 	Thumbnail    string `json:"episodeThumbnail"` // Thumbnail of the show
 	Poster       string `json:"episodePoster"`    // Poster of the show
+	Srno         int64  `json:"srno"`             // Serial number for catchup
+	ShowID       string `json:"showId"`           // Show ID for catchup
+	Showtime     string `json:"showtime"`         // Show time for catchup
 }
 
 // EPGResponse represents EPG details from JioTV EPG API response

@@ -256,6 +256,121 @@ func (tv *Television) Live(channelID string) (*LiveURLOutput, error) {
 	return &result, nil
 }
 
+// Catchup method generates m3u8 link for catchup content from JioTV API with the provided channel ID and EPG details
+func (tv *Television) Catchup(channelID string, begin int64, end int64, srno string, programID string, showtime int64) (*LiveURLOutput, error) {
+	formData := fasthttp.AcquireArgs()
+	defer fasthttp.ReleaseArgs(formData)
+
+	formData.Add("channel_id", channelID)
+	formData.Add("stream_type", "Catchup")
+	formData.Add("begin", fmt.Sprintf("%d", begin))
+	formData.Add("end", fmt.Sprintf("%d", end))
+	formData.Add("srno", srno)
+	formData.Add("programId", programID)
+	formData.Add("showtime", fmt.Sprintf("%d", showtime))
+
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	// Copy headers from the Television headers map to the request
+	for key, value := range tv.Headers {
+		req.Header.Set(key, value)
+	}
+
+	// Use the v1 API endpoint for catchup
+	url := "https://" + JIOTV_API_DOMAIN + "/playback/apis/v1/geturl?langId=6"
+	req.Header.Set(headers.AccessToken, tv.AccessToken)
+	req.SetRequestURI(url)
+	req.Header.SetMethod("POST")
+
+	// Encode the form data and set it as the request body
+	req.SetBody(formData.QueryString())
+
+	req.Header.Set("channel_id", channelID)
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	// Perform the HTTP POST request
+	if err := tv.Client.Do(req, resp); err != nil {
+		if strings.Contains(err.Error(), "server closed connection before returning the first response byte") {
+			utils.Log.Println("Retrying the request...")
+			return tv.Catchup(channelID, begin, end, srno, programID, showtime)
+		}
+		utils.Log.Panic(err)
+		return nil, err
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		// Store the response body as a string
+		response := string(resp.Body())
+
+		// Log headers and request data
+		utils.Log.Println("Request headers:", req.Header.String())
+		utils.Log.Println("Request data:", formData.String())
+		utils.Log.Panicln("Response: ", response)
+
+		return nil, fmt.Errorf("Request failed with status code: %d\nresponse: %s", resp.StatusCode(), response)
+	}
+
+	var result LiveURLOutput
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		utils.Log.Panic(err)
+		return nil, err
+	}
+
+	// Extract hdnea from any URL fields in the response
+	extractHdneaFromURL := func(u string) string {
+		if u == "" {
+			return ""
+		}
+		idx := strings.Index(u, "hdnea=")
+		if idx == -1 {
+			return ""
+		}
+		// token starts after hdnea=
+		token := u[idx+len("hdnea="):]
+		if i := strings.IndexByte(token, '&'); i != -1 {
+			token = token[:i]
+		}
+		return token
+	}
+	hdnea := extractHdneaFromURL(result.Bitrates.Auto)
+	if hdnea == "" {
+		hdnea = extractHdneaFromURL(result.Mpd.Result)
+	}
+	result.Hdnea = hdnea
+
+	// If hdnea exists and URLs don't already have it, append as query param
+	if hdnea != "" {
+		appendHdnea := func(u string) string {
+			if u == "" {
+				return u
+			}
+			if strings.Contains(u, "hdnea=") {
+				return u
+			}
+			sep := "?"
+			if strings.Contains(u, "?") {
+				sep = "&"
+			}
+			return u + sep + "hdnea=" + hdnea
+		}
+		result.Bitrates.Auto = appendHdnea(result.Bitrates.Auto)
+		result.Bitrates.High = appendHdnea(result.Bitrates.High)
+		result.Bitrates.Medium = appendHdnea(result.Bitrates.Medium)
+		result.Bitrates.Low = appendHdnea(result.Bitrates.Low)
+		result.Result = appendHdnea(result.Result)
+		if result.Mpd.Result != "" {
+			result.Mpd.Result = appendHdnea(result.Mpd.Result)
+		}
+		if result.Mpd.Key != "" {
+			result.Mpd.Key = appendHdnea(result.Mpd.Key)
+		}
+	}
+
+	return &result, nil
+}
+
 // Render method does HTTP GET request to the provided URL and return the response body
 func (tv *Television) Render(url string) ([]byte, int, string) {
 	req := fasthttp.AcquireRequest()
