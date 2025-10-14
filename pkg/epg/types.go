@@ -80,18 +80,19 @@ type ChannelsResponse struct {
 
 // EPGObject represents Individual EPG detail from JioTV EPG API response
 type EPGObject struct {
-	StartEpoch   int64  `json:"startEpoch"`       // Start time of the programme
-	EndEpoch     int64  `json:"endEpoch"`         // End time of the programme
-	ChannelID    uint16 `json:"channel_id"`       // Channel ID
-	ChannelName  string `json:"channel_name"`     // Channel name
-	ShowCategory string `json:"showCategory"`     // Category of the show
-	Description  string `json:"description"`      // Description of the show
-	Title        string `json:"showname"`         // Title of the show
-	Thumbnail    string `json:"episodeThumbnail"` // Thumbnail of the show
-	Poster       string `json:"episodePoster"`    // Poster of the show
-	Srno         int64  `json:"srno"`             // Serial number for catchup
-	ShowID       string `json:"showId"`           // Show ID for catchup
-	Showtime     string `json:"showtime"`         // Show time for catchup
+	StartEpoch          int64  `json:"startEpoch"`         // Start time of the programme
+	EndEpoch            int64  `json:"endEpoch"`           // End time of the programme
+	ChannelID           uint16 `json:"channel_id"`         // Channel ID
+	ChannelName         string `json:"channel_name"`       // Channel name
+	ShowCategory        string `json:"showCategory"`       // Category of the show
+	Description         string `json:"description"`        // Description of the show
+	Title               string `json:"showname"`           // Title of the show
+	Thumbnail           string `json:"episodeThumbnail"`   // Thumbnail of the show
+	Poster              string `json:"episodePoster"`      // Poster of the show
+	Srno                int64  `json:"srno"`               // Serial number for catchup
+	ShowID              string `json:"showId"`             // Show ID for catchup
+	Showtime            string `json:"showtime"`           // Show time for catchup
+	IsCatchupAvailable  bool   `json:"isCatchupAvailable"` // Whether catchup is available for this show
 }
 
 // EPGResponse represents EPG details from JioTV EPG API response

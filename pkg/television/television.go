@@ -318,6 +318,13 @@ func (tv *Television) Catchup(channelID string, begin int64, end int64, srno str
 		return nil, err
 	}
 
+	// Log the catchup result for debugging
+	utils.Log.Printf("Catchup API Response - Auto: %s, Message: %s", result.Bitrates.Auto, result.Message)
+	if result.Bitrates.Auto == "" {
+		utils.Log.Printf("ERROR: Catchup returned empty URL for channel %s", channelID)
+		utils.Log.Printf("Full response: %+v", result)
+	}
+
 	// Extract hdnea from any URL fields in the response
 	extractHdneaFromURL := func(u string) string {
 		if u == "" {
@@ -368,6 +375,42 @@ func (tv *Television) Catchup(channelID string, begin int64, end int64, srno str
 		}
 	}
 
+	// CRITICAL FIX: Follow redirects to get the actual master playlist URL
+	// The API returns a URL that redirects to the real M3U8, we must follow it
+	if result.Bitrates.Auto != "" {
+		finalURL, err := tv.followRedirects(result.Bitrates.Auto)
+		if err != nil {
+			utils.Log.Printf("WARNING: Failed to follow redirects for Auto bitrate: %v", err)
+		} else {
+			result.Bitrates.Auto = finalURL
+			utils.Log.Printf("Followed redirect - Final Auto URL: %s", finalURL)
+		}
+	}
+	if result.Bitrates.High != "" {
+		finalURL, err := tv.followRedirects(result.Bitrates.High)
+		if err != nil {
+			utils.Log.Printf("WARNING: Failed to follow redirects for High bitrate: %v", err)
+		} else {
+			result.Bitrates.High = finalURL
+		}
+	}
+	if result.Bitrates.Medium != "" {
+		finalURL, err := tv.followRedirects(result.Bitrates.Medium)
+		if err != nil {
+			utils.Log.Printf("WARNING: Failed to follow redirects for Medium bitrate: %v", err)
+		} else {
+			result.Bitrates.Medium = finalURL
+		}
+	}
+	if result.Bitrates.Low != "" {
+		finalURL, err := tv.followRedirects(result.Bitrates.Low)
+		if err != nil {
+			utils.Log.Printf("WARNING: Failed to follow redirects for Low bitrate: %v", err)
+		} else {
+			result.Bitrates.Low = finalURL
+		}
+	}
+
 	return &result, nil
 }
 
@@ -402,7 +445,9 @@ func (tv *Television) Render(url string) ([]byte, int, string) {
 
 	// Perform the HTTP GET request
 	if err := tv.Client.Do(req, resp); err != nil {
-		utils.Log.Panic(err)
+		utils.Log.Printf("ERROR: Failed to render M3U8: %v (URL: %s)", err, url)
+		// Return empty body with error status instead of panicking
+		return []byte{}, fasthttp.StatusBadGateway, ""
 	}
 
 	buf := resp.Body()
@@ -421,6 +466,50 @@ func (tv *Television) Render(url string) ([]byte, int, string) {
 	}
 
 	return buf, resp.StatusCode(), newHdnea
+}
+
+// followRedirects makes a GET request to follow redirects and returns the final URL
+// This is critical for catchup streams where the API returns a URL that redirects to the actual M3U8
+func (tv *Television) followRedirects(initialURL string) (string, error) {
+	currentURL := initialURL
+	maxRedirects := 10
+
+	for i := 0; i < maxRedirects; i++ {
+		req := fasthttp.AcquireRequest()
+		req.SetRequestURI(currentURL)
+		req.Header.SetMethod("GET")
+
+		// Copy headers from the Television headers map to the request
+		for key, value := range tv.Headers {
+			req.Header.Set(key, value)
+		}
+
+		resp := fasthttp.AcquireResponse()
+
+		// Perform the HTTP GET request
+		err := tv.Client.Do(req, resp)
+		statusCode := resp.StatusCode()
+		location := string(resp.Header.Peek("Location"))
+
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(resp)
+
+		if err != nil {
+			return "", fmt.Errorf("failed to follow redirect: %w", err)
+		}
+
+		// Check if this is a redirect response
+		if statusCode >= 300 && statusCode < 400 && location != "" {
+			// Follow the redirect
+			currentURL = location
+			continue
+		}
+
+		// No more redirects, return the final URL
+		return currentURL, nil
+	}
+
+	return "", fmt.Errorf("too many redirects (>%d)", maxRedirects)
 }
 
 // detectAndParseFormat attempts to detect the format of custom channels data and parse it

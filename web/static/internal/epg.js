@@ -9,8 +9,8 @@ function getCurrentAndNextTwoShows(epgData) {
         const showEndTime = new Date(show.endEpoch);
 
         if (showStartTime <= currentTime && currentTime < showEndTime) {
-            const { showname, description, endEpoch, episodePoster, keywords } = show;
-            shows.push({ showname, description, endEpoch, episodePoster, keywords });
+            const { showname, description, endEpoch, episodePoster, keywords, isCatchupAvailable } = show;
+            shows.push({ showname, description, endEpoch, episodePoster, keywords, isCatchupAvailable });
             currentIndex = index;
             return true; // Stop iterating after finding the current show
         }
@@ -21,8 +21,8 @@ function getCurrentAndNextTwoShows(epgData) {
     if (currentIndex !== -1) {
         const nextTwoShows = epgData.epg.slice(currentIndex + 1, currentIndex + 3);
         nextTwoShows.forEach(show => {
-            const { showname, description, endEpoch, episodePoster, keywords } = show;
-            shows.push({ showname, description, endEpoch, episodePoster, keywords });
+            const { showname, description, endEpoch, episodePoster, keywords, isCatchupAvailable } = show;
+            shows.push({ showname, description, endEpoch, episodePoster, keywords, isCatchupAvailable });
         });
     }
 
@@ -232,6 +232,16 @@ function updateEPG(epgData) {
 
     // Set the interval to update the timer every second
     const timerInterval = setInterval(updateTimer, 1000);
+
+    // Show/hide catchup button based on availability
+    const catchupParent = safeGetElementById('catchup_parent');
+    if (catchupParent) {
+        if (shows[0].isCatchupAvailable) {
+            catchupParent.style.display = 'block';
+        } else {
+            catchupParent.style.display = 'none';
+        }
+    }
 }
 
 const epgParent = safeGetElementById('epg_parent');

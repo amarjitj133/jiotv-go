@@ -98,7 +98,8 @@ func CatchupHandler(c *fiber.Ctx) error {
 	if catchupResult.Bitrates.Auto == "" {
 		error_message := "No catchup stream found for channel id: " + id + " Status: " + catchupResult.Message
 		utils.Log.Println(error_message)
-		utils.Log.Println(catchupResult)
+		utils.Log.Printf("Catchup request - Channel: %s, Start: %d, End: %d, Srno: %s, ShowId: %s", id, startTimeMs, endTime, srno, showId)
+		utils.Log.Printf("Catchup result: %+v", catchupResult)
 		return internalUtils.NotFoundError(c, error_message)
 	}
 

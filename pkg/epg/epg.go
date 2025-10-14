@@ -284,6 +284,24 @@ func FindShowByTime(channelID int, startTime int64) (*EPGObject, error) {
 	return nil, fmt.Errorf("no show found for channel %d at time %d", channelID, startTime)
 }
 
+// HasCatchupAvailable checks if a channel has any shows with catchup available
+// Returns true if at least one show in the channel's EPG has isCatchupAvailable: true
+func HasCatchupAvailable(channelID int) bool {
+	epgData, err := FetchEPGForChannel(channelID, 0)
+	if err != nil || epgData == nil || len(epgData.EPG) == 0 {
+		return false
+	}
+
+	// Check if any show has catchup available
+	for _, show := range epgData.EPG {
+		if show.IsCatchupAvailable {
+			return true
+		}
+	}
+
+	return false
+}
+
 // GenXMLGz generates XML EPG from JioTV API and writes it to a compressed gzip file.
 func GenXMLGz(filename string) error {
 	utils.Log.Println("Generating XML")
