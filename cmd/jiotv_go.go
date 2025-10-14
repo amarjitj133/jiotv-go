@@ -75,7 +75,7 @@ func JioTVServer(jiotvServerConfig JioTVServerConfig) error {
 		StreamRequestBody: true,
 		CaseSensitive:     false,
 		StrictRouting:     false,
-		EnablePrintRoutes: true,
+		EnablePrintRoutes: false,
 		ServerHeader:      "JioTV Go",
 		AppName:           fmt.Sprintf("JioTV Go %s", constants.Version),
 	})

@@ -202,7 +202,7 @@ func (tv *Television) Live(channelID string) (*LiveURLOutput, error) {
 			utils.Log.Println("Retrying the request...")
 			return tv.Live(channelID)
 		}
-		utils.Log.Panic(err)
+		utils.Log.Printf("ERROR: HTTP request failed for live: %v", err)
 		return nil, err
 	}
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -212,14 +212,14 @@ func (tv *Television) Live(channelID string) (*LiveURLOutput, error) {
 		// Log headers and request data
 		utils.Log.Println("Request headers:", req.Header.String())
 		utils.Log.Println("Request data:", formData.String())
-		utils.Log.Panicln("Response: ", response)
+		utils.Log.Printf("ERROR: Live request failed with status code %d. Response: %s", resp.StatusCode(), response)
 
 		return nil, fmt.Errorf("Request failed with status code: %d\nresponse: %s", resp.StatusCode(), response)
 	}
 
 	var result LiveURLOutput
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		utils.Log.Panic(err)
+		utils.Log.Printf("ERROR: Failed to unmarshal live response: %v", err)
 		return nil, err
 	}
 
@@ -317,7 +317,7 @@ func (tv *Television) Catchup(channelID string, begin int64, end int64, srno str
 			utils.Log.Println("Retrying the request...")
 			return tv.Catchup(channelID, begin, end, srno, programID, showtime)
 		}
-		utils.Log.Panic(err)
+		utils.Log.Printf("ERROR: HTTP request failed for catchup: %v", err)
 		return nil, err
 	}
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -327,14 +327,14 @@ func (tv *Television) Catchup(channelID string, begin int64, end int64, srno str
 		// Log headers and request data
 		utils.Log.Println("Request headers:", req.Header.String())
 		utils.Log.Println("Request data:", formData.String())
-		utils.Log.Panicln("Response: ", response)
+		utils.Log.Printf("ERROR: Catchup request failed with status code %d. Response: %s", resp.StatusCode(), response)
 
 		return nil, fmt.Errorf("Request failed with status code: %d\nresponse: %s", resp.StatusCode(), response)
 	}
 
 	var result LiveURLOutput
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		utils.Log.Panic(err)
+		utils.Log.Printf("ERROR: Failed to unmarshal catchup response: %v", err)
 		return nil, err
 	}
 
@@ -873,7 +873,7 @@ func getSLChannel(channelID string) (*LiveURLOutput, error) {
 
 		chu, err := base64.StdEncoding.DecodeString(SONY_CHANNELS[val])
 		if err != nil {
-			utils.Log.Panic(err)
+			utils.Log.Printf("ERROR: Failed to decode Sony channel URL: %v", err)
 			return nil, err
 		}
 
@@ -891,12 +891,14 @@ func getSLChannel(channelID string) (*LiveURLOutput, error) {
 
 		// Perform the HTTP GET request
 		if err := utils.GetRequestClient().Do(req, resp); err != nil {
-			utils.Log.Panic(err)
+			utils.Log.Printf("ERROR: HTTP request failed for Sony channel: %v", err)
+			return nil, err
 		}
 
 		if resp.StatusCode() != fasthttp.StatusFound {
-			utils.Log.Panicf("Request failed with status code: %d", resp.StatusCode())
-			utils.Log.Panicln("Response: ", string(resp.Body()))
+			utils.Log.Printf("ERROR: Sony channel request failed with status code: %d", resp.StatusCode())
+			utils.Log.Printf("Response: %s", string(resp.Body()))
+			return nil, fmt.Errorf("Request failed with status code: %d", resp.StatusCode())
 		}
 
 		// Store the location header in actual_url
