@@ -11,7 +11,6 @@ import (
 	"github.com/jiotv-go/jiotv_go/v3/internal/constants/headers"
 	"github.com/jiotv-go/jiotv_go/v3/internal/constants/urls"
 	internalUtils "github.com/jiotv-go/jiotv_go/v3/internal/utils"
-	"github.com/jiotv-go/jiotv_go/v3/pkg/television"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/utils"
 	"github.com/valyala/fasthttp"
 )
@@ -106,7 +105,7 @@ func EnsureFreshTokens() error {
 		if err != nil {
 			return fmt.Errorf("failed to get fresh credentials: %v", err)
 		}
-		TV = television.New(freshCreds)
+		TV.UpdateCredentials(freshCreds)
 	}
 
 	return nil
@@ -253,7 +252,7 @@ func LoginRefreshAccessToken() error {
 			utils.Log.Printf("Error saving refreshed credentials: %v", err)
 			return err
 		}
-		TV = television.New(tokenData)
+		TV.UpdateCredentials(tokenData)
 		utils.Log.Println("AccessToken refreshed successfully")
 		return nil
 	} else {
@@ -339,7 +338,7 @@ func LoginRefreshSSOToken() error {
 			utils.Log.Printf("Error saving refreshed SSOToken credentials: %v", err)
 			return err
 		}
-		TV = television.New(tokenData)
+		TV.UpdateCredentials(tokenData)
 		utils.Log.Println("SSOToken refreshed successfully")
 		return nil
 	} else {

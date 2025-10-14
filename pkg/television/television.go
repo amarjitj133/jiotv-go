@@ -97,6 +97,26 @@ func New(credentials *utils.JIOTV_CREDENTIALS) *Television {
 	}
 }
 
+// UpdateCredentials updates the Television instance with new credentials without creating a new instance
+// This prevents race conditions when tokens are refreshed while requests are in flight
+func (tv *Television) UpdateCredentials(credentials *utils.JIOTV_CREDENTIALS) {
+	if credentials == nil {
+		return
+	}
+
+	// Update token fields
+	tv.AccessToken = credentials.AccessToken
+	tv.SsoToken = credentials.SSOToken
+	tv.Crm = credentials.CRM
+	tv.UniqueID = credentials.UniqueID
+
+	// Update headers that depend on credentials
+	tv.Headers["crmid"] = credentials.CRM
+	tv.Headers["userId"] = credentials.CRM
+	tv.Headers["subscriberId"] = credentials.CRM
+	tv.Headers["uniqueId"] = credentials.UniqueID
+}
+
 // InitCustomChannels initializes custom channels at startup if configured
 func InitCustomChannels() {
 	if config.Cfg.CustomChannelsFile != "" {
