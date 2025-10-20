@@ -145,8 +145,9 @@ function displayFavoriteChannels() {
   });
 
   // Add all other cards to original fragment
+  const favoriteIdSet = new Set(favoriteIds);
   allChannelCards.forEach(card => {
-    if (!favoriteIds.includes(card.dataset.channelId)) {
+    if (!favoriteIdSet.has(card.dataset.channelId)) {
       originalFragment.appendChild(card);
     }
   });
