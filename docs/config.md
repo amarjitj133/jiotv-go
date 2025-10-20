@@ -287,7 +287,7 @@ The file is also available at [configs/jiotv-config.json](https://github.com/jio
     "log_to_stdout": false,
     "custom_channels_file": "",
     "default_categories": [],
-    	"default_languages": [],
-    	"favorite_channel_ids": []
-    }
+    "default_languages": [],
+    "favorite_channel_ids": []
+}
     ```
