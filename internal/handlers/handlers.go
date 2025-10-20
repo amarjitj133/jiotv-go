@@ -520,7 +520,6 @@ func ChannelsHandler(c *fiber.Ctx) error {
 		if c.Query("fav") == "true" {
 			channels = television.FilterFavoriteChannels(channels)
 		}
-		utils.Log.Printf("FILTERED CHANNELS=%v\n", channels)
 		for _, channel := range channels {
 
 			if languages != "" && !utils.ContainsString(television.LanguageMap[channel.Language], strings.Split(languages, ",")) {
