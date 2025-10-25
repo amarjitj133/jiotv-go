@@ -62,4 +62,4 @@ docs/book/
 book/
 
 # Claude Code settings
-.claude/settings.local.json
+.claude/
