@@ -6,14 +6,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jiotv-go/jiotv_go/v3/internal/config"
 	"github.com/jiotv-go/jiotv_go/v3/internal/constants/headers"
 	"github.com/jiotv-go/jiotv_go/v3/internal/constants/urls"
 	internalUtils "github.com/jiotv-go/jiotv_go/v3/internal/utils"
-	"github.com/jiotv-go/jiotv_go/v3/pkg/epg"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/secureurl"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/television"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/utils"
@@ -29,10 +27,6 @@ var (
 	Title            string
 	EnableDRM        bool
 	SONY_LIST        = []string{"154", "155", "162", "289", "291", "471", "474", "476", "483", "514", "524", "525", "697", "872", "873", "874", "891", "892", "1146", "1393", "1772", "1773", "1774", "1775"}
-
-	// Catchup availability cache
-	catchupCache      = make(map[int]bool)
-	catchupCacheMutex sync.RWMutex
 )
 
 const (
@@ -81,9 +75,6 @@ func Init() {
 
 	// Initialize custom channels at startup if configured
 	television.InitCustomChannels()
-
-	// Start background caching of catchup availability for all channels
-	go initCatchupCache()
 }
 
 // ErrorMessageHandler handles error messages
@@ -507,125 +498,25 @@ func RenderTSHandler(c *fiber.Ctx) error {
 	return internalUtils.ProxyRequest(c, decoded_url, TV.Client, PLAYER_USER_AGENT)
 }
 
-// initCatchupCache initializes catchup availability cache in the background
-// This runs at server startup and populates the cache for all channels
-func initCatchupCache() {
-	startTime := time.Now()
-	utils.Log.Println("Starting background caching of catchup availability for all channels...")
-
-	// Fetch all channels
-	channels, err := television.Channels()
-	if err != nil {
-		utils.Log.Printf("ERROR: Failed to fetch channels for catchup cache initialization: %v", err)
-		return
+// calculateCatchupDays calculates the number of days of catchup available
+// based on startTime from Live API response
+// startTime and currentTime are in milliseconds (epoch timestamps)
+func calculateCatchupDays(startTime, currentTime float64) int {
+	if startTime == 0 || currentTime == 0 {
+		return 7 // Default fallback
 	}
-
-	// Counter for progress tracking
-	total := 0
-	withCatchup := 0
-
-	// Check catchup for each channel
-	for _, channel := range channels.Result {
-		// Skip custom channels and Sony channels
-		if strings.HasPrefix(channel.ID, "cc_") || strings.HasPrefix(channel.ID, "sl") {
-			continue
-		}
-
-		channelID, err := strconv.Atoi(channel.ID)
-		if err != nil {
-			continue // Skip if channel ID is not a valid integer
-		}
-
-		// Fetch EPG data
-		epgData, err := epg.FetchEPGForChannel(channelID, 0)
-		if err != nil {
-			// On error, cache as no catchup
-			catchupCacheMutex.Lock()
-			catchupCache[channelID] = false
-			catchupCacheMutex.Unlock()
-			total++
-			continue
-		}
-
-		// Check if any show has catchup available
-		hasCatchup := false
-		for _, show := range epgData.EPG {
-			if show.IsCatchupAvailable {
-				hasCatchup = true
-				break
-			}
-		}
-
-		// Cache the result
-		catchupCacheMutex.Lock()
-		catchupCache[channelID] = hasCatchup
-		catchupCacheMutex.Unlock()
-
-		total++
-		if hasCatchup {
-			withCatchup++
-		}
-
-		// Log progress every 50 channels
-		if total%50 == 0 {
-			utils.Log.Printf("Catchup caching progress: %d channels processed...", total)
-		}
+	
+	// Calculate difference in milliseconds
+	diffMs := currentTime - startTime
+	// Convert to days (ms -> seconds -> minutes -> hours -> days)
+	days := int(diffMs / (1000 * 60 * 60 * 24))
+	
+	// Ensure we return at least 1 day if there's any catchup
+	if days < 1 && diffMs > 0 {
+		days = 1
 	}
-
-	duration := time.Since(startTime)
-	utils.Log.Printf("Catchup cache initialization complete: %d channels processed, %d with catchup available (took %v)", total, withCatchup, duration)
-}
-
-// hasCatchupAvailableCached checks if a channel has catchup available by checking the cache only
-// Returns false if not cached yet (non-blocking)
-func hasCatchupAvailableCached(channelID int) bool {
-	catchupCacheMutex.RLock()
-	defer catchupCacheMutex.RUnlock()
-
-	if available, exists := catchupCache[channelID]; exists {
-		return available
-	}
-
-	// Not cached yet, return false (will be cached by background process)
-	return false
-}
-
-// hasCatchupAvailable checks if a channel has catchup available by checking EPG data
-// Results are cached to avoid repeated EPG lookups
-func hasCatchupAvailable(channelID int) bool {
-	// Check cache first (read lock)
-	catchupCacheMutex.RLock()
-	if available, exists := catchupCache[channelID]; exists {
-		catchupCacheMutex.RUnlock()
-		return available
-	}
-	catchupCacheMutex.RUnlock()
-
-	// Not in cache, fetch EPG data
-	epgData, err := epg.FetchEPGForChannel(channelID, 0)
-	if err != nil {
-		// On error, assume no catchup and cache the result
-		catchupCacheMutex.Lock()
-		catchupCache[channelID] = false
-		catchupCacheMutex.Unlock()
-		return false
-	}
-
-	// Check if any show has catchup available
-	hasCatchup := false
-	for _, show := range epgData.EPG {
-		if show.IsCatchupAvailable {
-			hasCatchup = true
-			break
-		}
-	}
-
-	// Cache the result (write lock)
-	catchupCacheMutex.Lock()
-	catchupCache[channelID] = hasCatchup
-	catchupCacheMutex.Unlock()
-
-	return hasCatchup
+	
+	return days
 }
 
 // ChannelsHandler fetch all channels from JioTV API
@@ -682,16 +573,14 @@ func ChannelsHandler(c *fiber.Ctx) error {
 				groupTitle = television.CategoryMap[channel.Category]
 			}
 
-			// Add catchup attributes for non-custom channels
-			// Check cache only (non-blocking) to see if catchup is available
+			// Add catchup attributes for channels that have catchup available
+			// Use the isCatchupAvailable field from the JioTV API response
+			// Use a default value of 7 days since calling Live API for each channel would be too expensive
 			catchupAttrs := ""
-			if !strings.HasPrefix(channel.ID, "cc_") && !strings.HasPrefix(channel.ID, "sl") {
-				// Check if channel has catchup available (cache only, non-blocking)
-				channelIDInt, err := strconv.Atoi(channel.ID)
-				if err == nil && hasCatchupAvailableCached(channelIDInt) {
-					catchupSource := fmt.Sprintf("%s/catchup/%s?start={utc}&end={utcend}", hostURL, channel.ID)
-					catchupAttrs = fmt.Sprintf(" catchup=\"default\" catchup-days=\"7\" catchup-source=%q", catchupSource)
-				}
+			if channel.IsCatchupAvailable {
+				const defaultCatchupDays = 7
+				catchupSource := fmt.Sprintf("%s/catchup/%s?start={utc}&end={utcend}", hostURL, channel.ID)
+				catchupAttrs = fmt.Sprintf(" catchup=\"default\" catchup-days=\"%d\" catchup-source=%q", defaultCatchupDays, catchupSource)
 			}
 
 			m3uContent += fmt.Sprintf("#EXTINF:-1 tvg-id=%q tvg-name=%q tvg-logo=%q tvg-language=%q tvg-type=%q group-title=%q%s, %s\n%s\n",
@@ -776,11 +665,31 @@ func EPGViewerHandler(c *fiber.Ctx) error {
 		}
 	}
 
+	// Ensure tokens are fresh before making Live API call
+	if err := EnsureFreshTokens(); err != nil {
+		utils.Log.Printf("Failed to ensure fresh tokens: %v", err)
+		// Continue - use default catchup days if Live API fails
+	}
+
+	// Call Live API to get actual StartTime and EndTime for this channel
+	// This tells us the exact catchup window available
+	catchupDays := 7 // Default fallback
+	liveResult, err := TV.Live(id)
+	if err != nil {
+		utils.Log.Printf("Could not get Live API response for channel %s: %v. Using default catchup days: %d", id, err, catchupDays)
+	} else {
+		// Calculate actual catchup days from StartTime and CurrentTime
+		catchupDays = calculateCatchupDays(liveResult.StartTime, liveResult.CurrentTime)
+		utils.Log.Printf("Channel %s has %d days of catchup available (StartTime: %.0f, CurrentTime: %.0f)", 
+			id, catchupDays, liveResult.StartTime, liveResult.CurrentTime)
+	}
+
 	internalUtils.SetCacheHeader(c, 3600)
 	return c.Render("views/epg_viewer", fiber.Map{
-		"Title":       Title,
-		"ChannelID":   id,
-		"ChannelName": channelName,
+		"Title":        Title,
+		"ChannelID":    id,
+		"ChannelName":  channelName,
+		"CatchupDays":  catchupDays,
 	})
 }
 

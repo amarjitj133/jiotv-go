@@ -6,11 +6,150 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jiotv-go/jiotv_go/v3/internal/utils"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/epg"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/secureurl"
-	internalUtils "github.com/jiotv-go/jiotv_go/v3/internal/utils"
-	"github.com/jiotv-go/jiotv_go/v3/pkg/utils"
+	"github.com/jiotv-go/jiotv_go/v3/pkg/television"
+	pkgUtils "github.com/jiotv-go/jiotv_go/v3/pkg/utils"
 )
+
+// catchupParams holds the parsed catchup request parameters
+type catchupParams struct {
+	channelID   string
+	channelIDInt int
+	startTimeMs int64
+	endTime     int64
+	srno        string
+	showID      string
+}
+
+// parseCatchupParams extracts and validates catchup parameters from the request
+// Returns catchupParams or an error if validation fails
+func parseCatchupParams(c *fiber.Ctx, id string) (*catchupParams, error) {
+	// Remove suffix .m3u8 if exists
+	id = strings.Replace(id, ".m3u8", "", 1)
+
+	// Get start parameter (required)
+	startStr := c.Query("start")
+	if startStr == "" {
+		return nil, fmt.Errorf("start parameter is required")
+	}
+
+	// Parse start time
+	startTime, err := strconv.ParseInt(startStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start time format")
+	}
+
+	// Convert start time from seconds to milliseconds
+	startTimeMs := startTime * 1000
+
+	// Parse channel ID to int for EPG lookup
+	channelIDInt, err := strconv.Atoi(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid channel ID")
+	}
+
+	// Try to get EPG metadata from query params first (more reliable)
+	srno := c.Query("srno")
+	showID := c.Query("showId")
+
+	var endTime int64
+
+	// If srno and showId are provided, we can skip EPG lookup
+	if srno != "" && showID != "" {
+		endStr := c.Query("end")
+		if endStr != "" {
+			endTime, err = strconv.ParseInt(endStr, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid end time format")
+			}
+			endTime = endTime * 1000 // Convert to milliseconds
+		} else {
+			// If end time not provided, find it from EPG
+			show, err := epg.FindShowByTime(channelIDInt, startTimeMs)
+			if err != nil {
+				pkgUtils.Log.Printf("Error finding show in EPG: %v", err)
+				return nil, fmt.Errorf("no catchup content found for the specified time: %v", err)
+			}
+			endTime = show.EndEpoch
+		}
+	} else {
+		// Find show in EPG to get metadata
+		show, err := epg.FindShowByTime(channelIDInt, startTimeMs)
+		if err != nil {
+			pkgUtils.Log.Printf("Error finding show in EPG: %v", err)
+			return nil, fmt.Errorf("no catchup content found for the specified time: %v", err)
+		}
+		endTime = show.EndEpoch
+		srno = fmt.Sprintf("%d", show.Srno)
+		showID = show.ShowID
+	}
+
+	return &catchupParams{
+		channelID:   id,
+		channelIDInt: channelIDInt,
+		startTimeMs: startTimeMs,
+		endTime:     endTime,
+		srno:        srno,
+		showID:      showID,
+	}, nil
+}
+
+// getCatchupStream fetches the catchup stream from JioTV API
+// Returns the catchup result or an error
+func getCatchupStream(params *catchupParams) (*television.LiveURLOutput, error) {
+	// For regular JioTV channels, ensure tokens are fresh before making API call
+	if err := EnsureFreshTokens(); err != nil {
+		pkgUtils.Log.Printf("Failed to ensure fresh tokens: %v", err)
+		// Continue with the request - tokens might still work
+	}
+
+	// Call TV.Catchup to get the stream URL
+	catchupResult, err := TV.Catchup(params.channelID, params.startTimeMs, params.endTime, params.srno, params.showID, params.startTimeMs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if catchupResult.Bitrates.Auto is empty
+	if catchupResult.Bitrates.Auto == "" {
+		pkgUtils.Log.Printf("Catchup request - Channel: %s, Start: %d, End: %d, Srno: %s, ShowId: %s", 
+			params.channelID, params.startTimeMs, params.endTime, params.srno, params.showID)
+		pkgUtils.Log.Printf("Catchup result: %+v", catchupResult)
+		return nil, fmt.Errorf("no catchup stream found for channel id: %s Status: %s", params.channelID, catchupResult.Message)
+	}
+
+	return catchupResult, nil
+}
+
+// buildCatchupRedirectURL constructs the redirect URL for catchup playback
+func buildCatchupRedirectURL(catchupURL, channelID, quality, hdnea string) (string, error) {
+	// Ensure hdnea from Catchup is appended to the URL
+	if hdnea != "" && !strings.Contains(catchupURL, "hdnea=") {
+		sep := "?"
+		if strings.Contains(catchupURL, "?") {
+			sep = "&"
+		}
+		catchupURL = catchupURL + sep + "hdnea=" + hdnea
+	}
+
+	// Encrypt the URL
+	codedURL, err := secureurl.EncryptURL(catchupURL)
+	if err != nil {
+		return "", err
+	}
+
+	// Build redirect URL
+	redirectURL := "/render.m3u8?auth=" + codedURL + "&channel_key_id=" + channelID
+	if quality != "" {
+		redirectURL += "&q=" + quality
+	}
+	if hdnea != "" {
+		redirectURL += "&hdnea=" + hdnea
+	}
+
+	return redirectURL, nil
+}
 
 // CatchupHandler handles catchup stream route `/catchup/:id`
 // Query parameters:
@@ -20,109 +159,30 @@ import (
 //   - showId: Show ID from EPG (optional, improves reliability)
 func CatchupHandler(c *fiber.Ctx) error {
 	id := c.Params("id")
-	// remove suffix .m3u8 if exists
-	id = strings.Replace(id, ".m3u8", "", 1)
 
-	// Get parameters from query
-	startStr := c.Query("start")
-	if startStr == "" {
-		return internalUtils.BadRequestError(c, "start parameter is required")
-	}
-
-	// Parse start time
-	startTime, err := strconv.ParseInt(startStr, 10, 64)
+	// Parse and validate parameters
+	params, err := parseCatchupParams(c, id)
 	if err != nil {
-		return internalUtils.BadRequestError(c, "invalid start time format")
+		return utils.BadRequestError(c, err.Error())
 	}
 
-	// Convert start time from seconds to milliseconds
-	startTimeMs := startTime * 1000
-
-	// Parse channel ID to int for EPG lookup
-	channelID, err := strconv.Atoi(id)
+	// Get catchup stream
+	catchupResult, err := getCatchupStream(params)
 	if err != nil {
-		return internalUtils.BadRequestError(c, "invalid channel ID")
-	}
-
-	// For regular JioTV channels, ensure tokens are fresh before making API call
-	if err := EnsureFreshTokens(); err != nil {
-		utils.Log.Printf("Failed to ensure fresh tokens: %v", err)
-		// Continue with the request - tokens might still work
-	}
-
-	// Try to get EPG metadata from query params first (more reliable)
-	srno := c.Query("srno")
-	showId := c.Query("showId")
-
-	var endTime int64
-	var show *epg.EPGObject
-
-	// If srno and showId are provided, we can skip EPG lookup
-	if srno != "" && showId != "" {
-		endStr := c.Query("end")
-		if endStr != "" {
-			endTime, err = strconv.ParseInt(endStr, 10, 64)
-			if err != nil {
-				return internalUtils.BadRequestError(c, "invalid end time format")
-			}
-			endTime = endTime * 1000 // Convert to milliseconds
-		} else {
-			// If end time not provided, find it from EPG
-			show, err = epg.FindShowByTime(channelID, startTimeMs)
-			if err != nil {
-				utils.Log.Printf("Error finding show in EPG: %v", err)
-				return internalUtils.NotFoundError(c, fmt.Sprintf("No catchup content found for the specified time: %v", err))
-			}
-			endTime = show.EndEpoch
+		pkgUtils.Log.Println(err)
+		if strings.Contains(err.Error(), "no catchup stream found") {
+			return utils.NotFoundError(c, err.Error())
 		}
-	} else {
-		// Find show in EPG to get metadata
-		show, err = epg.FindShowByTime(channelID, startTimeMs)
-		if err != nil {
-			utils.Log.Printf("Error finding show in EPG: %v", err)
-			return internalUtils.NotFoundError(c, fmt.Sprintf("No catchup content found for the specified time: %v", err))
-		}
-		endTime = show.EndEpoch
-		srno = fmt.Sprintf("%d", show.Srno)
-		showId = show.ShowID
+		return utils.InternalServerError(c, err)
 	}
 
-	// Call TV.Catchup to get the stream URL
-	catchupResult, err := TV.Catchup(id, startTimeMs, endTime, srno, showId, startTimeMs)
+	// Build redirect URL with auto quality
+	redirectURL, err := buildCatchupRedirectURL(catchupResult.Bitrates.Auto, params.channelID, "", catchupResult.Hdnea)
 	if err != nil {
-		utils.Log.Println(err)
-		return internalUtils.InternalServerError(c, err)
+		pkgUtils.Log.Println(err)
+		return utils.ForbiddenError(c, err)
 	}
 
-	// Check if catchupResult.Bitrates.Auto is empty
-	if catchupResult.Bitrates.Auto == "" {
-		error_message := "No catchup stream found for channel id: " + id + " Status: " + catchupResult.Message
-		utils.Log.Println(error_message)
-		utils.Log.Printf("Catchup request - Channel: %s, Start: %d, End: %d, Srno: %s, ShowId: %s", id, startTimeMs, endTime, srno, showId)
-		utils.Log.Printf("Catchup result: %+v", catchupResult)
-		return internalUtils.NotFoundError(c, error_message)
-	}
-
-	// Ensure hdnea from Catchup is appended to subsequent requests
-	catchupURL := catchupResult.Bitrates.Auto
-	if catchupResult.Hdnea != "" && !strings.Contains(catchupURL, "hdnea=") {
-		sep := "?"
-		if strings.Contains(catchupURL, "?") {
-			sep = "&"
-		}
-		catchupURL = catchupURL + sep + "hdnea=" + catchupResult.Hdnea
-	}
-
-	coded_url, err := secureurl.EncryptURL(catchupURL)
-	if err != nil {
-		utils.Log.Println(err)
-		return internalUtils.ForbiddenError(c, err)
-	}
-	// also add hdnea as an explicit query param for downstream (no client cookie)
-	redirectURL := "/render.m3u8?auth=" + coded_url + "&channel_key_id=" + id
-	if catchupResult.Hdnea != "" {
-		redirectURL += "&hdnea=" + catchupResult.Hdnea
-	}
 	return c.Redirect(redirectURL, fiber.StatusFound)
 }
 
@@ -135,101 +195,33 @@ func CatchupHandler(c *fiber.Ctx) error {
 func CatchupQualityHandler(c *fiber.Ctx) error {
 	quality := c.Params("quality")
 	id := c.Params("id")
-	// remove suffix .m3u8 if exists
-	id = strings.Replace(id, ".m3u8", "", 1)
 
-	// Get parameters from query
-	startStr := c.Query("start")
-	if startStr == "" {
-		return internalUtils.BadRequestError(c, "start parameter is required")
-	}
-
-	// Parse start time
-	startTime, err := strconv.ParseInt(startStr, 10, 64)
+	// Parse and validate parameters
+	params, err := parseCatchupParams(c, id)
 	if err != nil {
-		return internalUtils.BadRequestError(c, "invalid start time format")
+		return utils.BadRequestError(c, err.Error())
 	}
 
-	// Convert start time from seconds to milliseconds
-	startTimeMs := startTime * 1000
-
-	// Parse channel ID to int for EPG lookup
-	channelID, err := strconv.Atoi(id)
+	// Get catchup stream
+	catchupResult, err := getCatchupStream(params)
 	if err != nil {
-		return internalUtils.BadRequestError(c, "invalid channel ID")
-	}
-
-	// For regular JioTV channels, ensure tokens are fresh before making API call
-	if err := EnsureFreshTokens(); err != nil {
-		utils.Log.Printf("Failed to ensure fresh tokens: %v", err)
-		// Continue with the request - tokens might still work
-	}
-
-	// Try to get EPG metadata from query params first (more reliable)
-	srno := c.Query("srno")
-	showId := c.Query("showId")
-
-	var endTime int64
-	var show *epg.EPGObject
-
-	// If srno and showId are provided, we can skip EPG lookup
-	if srno != "" && showId != "" {
-		endStr := c.Query("end")
-		if endStr != "" {
-			endTime, err = strconv.ParseInt(endStr, 10, 64)
-			if err != nil {
-				return internalUtils.BadRequestError(c, "invalid end time format")
-			}
-			endTime = endTime * 1000 // Convert to milliseconds
-		} else {
-			// If end time not provided, find it from EPG
-			show, err = epg.FindShowByTime(channelID, startTimeMs)
-			if err != nil {
-				utils.Log.Printf("Error finding show in EPG: %v", err)
-				return internalUtils.NotFoundError(c, fmt.Sprintf("No catchup content found for the specified time: %v", err))
-			}
-			endTime = show.EndEpoch
+		pkgUtils.Log.Println(err)
+		if strings.Contains(err.Error(), "no catchup stream found") {
+			return utils.NotFoundError(c, err.Error())
 		}
-	} else {
-		// Find show in EPG to get metadata
-		show, err = epg.FindShowByTime(channelID, startTimeMs)
-		if err != nil {
-			utils.Log.Printf("Error finding show in EPG: %v", err)
-			return internalUtils.NotFoundError(c, fmt.Sprintf("No catchup content found for the specified time: %v", err))
-		}
-		endTime = show.EndEpoch
-		srno = fmt.Sprintf("%d", show.Srno)
-		showId = show.ShowID
+		return utils.InternalServerError(c, err)
 	}
 
-	// Call TV.Catchup to get the stream URL
-	catchupResult, err := TV.Catchup(id, startTimeMs, endTime, srno, showId, startTimeMs)
+	// Select quality level based on query parameter
+	bitrates := catchupResult.Bitrates
+	catchupURL := utils.SelectQuality(quality, bitrates.Auto, bitrates.High, bitrates.Medium, bitrates.Low)
+
+	// Build redirect URL with specified quality
+	redirectURL, err := buildCatchupRedirectURL(catchupURL, params.channelID, quality, catchupResult.Hdnea)
 	if err != nil {
-		utils.Log.Println(err)
-		return internalUtils.InternalServerError(c, err)
+		pkgUtils.Log.Println(err)
+		return utils.ForbiddenError(c, err)
 	}
 
-	Bitrates := catchupResult.Bitrates
-
-	// select quality level based on query parameter
-	catchupURL := internalUtils.SelectQuality(quality, Bitrates.Auto, Bitrates.High, Bitrates.Medium, Bitrates.Low)
-	if catchupResult.Hdnea != "" && !strings.Contains(catchupURL, "hdnea=") {
-		sep := "?"
-		if strings.Contains(catchupURL, "?") {
-			sep = "&"
-		}
-		catchupURL = catchupURL + sep + "hdnea=" + catchupResult.Hdnea
-	}
-
-	// quote url as it will be passed as a query parameter
-	coded_url, err := secureurl.EncryptURL(catchupURL)
-	if err != nil {
-		utils.Log.Println(err)
-		return internalUtils.ForbiddenError(c, err)
-	}
-	redirectURL := "/render.m3u8?auth=" + coded_url + "&channel_key_id=" + id + "&q=" + quality
-	if catchupResult.Hdnea != "" {
-		redirectURL += "&hdnea=" + catchupResult.Hdnea
-	}
 	return c.Redirect(redirectURL, fiber.StatusFound)
 }

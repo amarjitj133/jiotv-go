@@ -1,4 +1,6 @@
-export const testEnvironment = 'jsdom';
-export const collectCoverageFrom = [
-    'static/internal/**/*.js',
-];
+module.exports = {
+    testEnvironment: 'jsdom',
+    collectCoverageFrom: [
+        'static/internal/**/*.js',
+    ],
+};

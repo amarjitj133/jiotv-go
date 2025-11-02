@@ -520,17 +520,16 @@ func BuildHLSPlayURL(quality, channelID string) string {
 
 // BuildCatchupPlayURL builds catchup play URL for web player
 func BuildCatchupPlayURL(quality, channelID, startTime, endTime string) string {
-	baseURL := fmt.Sprintf("/catchup/%s.m3u8?start=%s", channelID, startTime)
-	if endTime != "" {
-		baseURL += fmt.Sprintf("&end=%s", endTime)
-	}
+	var url string
 	if quality != "" && quality != "auto" {
-		return fmt.Sprintf("/catchup/%s/%s.m3u8?start=%s", quality, channelID, startTime) + (func() string {
-			if endTime != "" {
-				return fmt.Sprintf("&end=%s", endTime)
-			}
-			return ""
-		})()
+		url = fmt.Sprintf("/catchup/%s/%s.m3u8?start=%s", quality, channelID, startTime)
+	} else {
+		url = fmt.Sprintf("/catchup/%s.m3u8?start=%s", channelID, startTime)
 	}
-	return baseURL
+
+	if endTime != "" {
+		url += fmt.Sprintf("&end=%s", endTime)
+	}
+
+	return url
 }

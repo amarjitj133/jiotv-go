@@ -33,6 +33,9 @@ const (
 	// Default values for random scheduling when crypto/rand fails
 	defaultRandomHour   = 2
 	defaultRandomMinute = 30
+	// FindShowTimeTolerance is the time tolerance (in milliseconds) for matching shows by start time
+	// This allows for a ±5 minute window when finding shows in the EPG
+	FindShowTimeTolerance = 5 * 60 * 1000 // 5 minutes in milliseconds
 )
 
 // Init initializes EPG generation and schedules it for the next day.
@@ -272,10 +275,9 @@ func FindShowByTime(channelID int, startTime int64) (*EPGObject, error) {
 			continue
 		}
 
-		// Look for a show that matches the start time (with 5 minute tolerance)
-		tolerance := int64(5 * 60 * 1000) // 5 minutes in milliseconds
+		// Look for a show that matches the start time (with tolerance)
 		for _, show := range epgResponse.EPG {
-			if show.StartEpoch >= startTime-tolerance && show.StartEpoch <= startTime+tolerance {
+			if show.StartEpoch >= startTime-FindShowTimeTolerance && show.StartEpoch <= startTime+FindShowTimeTolerance {
 				return &show, nil
 			}
 		}
