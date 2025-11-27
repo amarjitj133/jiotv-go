@@ -33,11 +33,9 @@
             ></iframe>
           </div>
           <div class="mt-2 flex justify-center gap-2">
-            {{if .IsCatchupAvailable}}
             <a href="/catchup/{{ .ChannelID }}" class="btn">
-              Catchup
+              Back to Catchup
             </a>
-            {{end}}
             <button id="aspect-43-toggle" class="btn" onclick="toggleAspectRatio()">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -64,25 +62,16 @@
             </h2>
             <div id="epg" class="w-full">
               <div class="card w-full bg-base-200 shadow-xl">
-                <figure><img id="episodePoster" alt="Episode Poster" /></figure>
+                <figure><img id="episodePoster" src="{{ .EpisodePoster }}" alt="Episode Poster" onerror="this.src='https://jiotvimages.cdn.jio.com/dare_images/images/{{.ChannelID}}.png'"/></figure>
                 <div class="card-body p-4">
-                  <h2 id="showname" class="card-title text-base"></h2>
+                  <h2 id="showname" class="card-title text-base">{{ .ShowName }}</h2>
                   <div class="flex flex-row gap-2 items-center justify-between">
-                    <div class="badge badge-error badge-outline">Live</div>
+                    <div class="badge badge-info badge-outline">Catchup</div>
                     <div class="text-sm">
-                      <span>Ends in </span>
-                      <span id="countdown_hour" class="countdown">
-                        <span id="e_hour" style="--value:0;"></span>h
-                      </span>
-                      <span id="countdown_minute" class="countdown">
-                        <span id="e_minute" style="--value:0;"></span>m
-                      </span>
-                      <span id="countdown_second" class="countdown">
-                        <span id="e_second" style="--value:0;"></span>s
-                      </span>
+                      <span>{{ .ShowTime }}</span>
                     </div>
                   </div>
-                  <p id="description" class="text-sm"></p>
+                  <p id="description" class="text-sm">{{ .Description }}</p>
                   <div id="keywords" class="card-actions justify-end">
                     <div class="hidden badge badge-outline"></div>
                   </div>
@@ -152,7 +141,9 @@
     </div>
     <script src="/static/internal/utils.js"></script>
     <script src="/static/internal/common.js"></script>
-    <script src="/static/internal/epg.js"></script>
+    <script src="/static/internal/utils.js"></script>
+    <script src="/static/internal/common.js"></script>
+    <!-- Removed epg.js as we don't need live EPG updates -->
     {{ template "footer" . }}
   </body>
 </html>

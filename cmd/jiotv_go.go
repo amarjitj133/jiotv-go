@@ -115,6 +115,8 @@ func JioTVServer(jiotvServerConfig JioTVServerConfig) error {
 	app.Get("/render.key", handlers.RenderKeyHandler)
 	app.Get("/channels", handlers.ChannelsHandler)
 	app.Get("/playlist.m3u", handlers.PlaylistHandler)
+	app.Get("/playlist/channel/:id", handlers.ChannelPlaylistRedirectHandler)
+	app.Get("/playlist/export/:filename", handlers.ChannelPlaylistExportHandler)
 	app.Get("/play/:id", handlers.PlayHandler)
 	app.Get("/player/:id", handlers.PlayerHandler)
 	app.Get("/favicon.ico", handlers.FaviconHandler)
@@ -125,6 +127,12 @@ func JioTVServer(jiotvServerConfig JioTVServerConfig) error {
 	app.Get("/mpd/:channelID", handlers.LiveMpdHandler)
 	app.Post("/drm", handlers.DRMKeyHandler)
 	app.Get("/dashtime", handlers.DASHTimeHandler)
+
+	// Catchup Routes
+	app.Get("/catchup/:id", handlers.CatchupHandler)
+	app.Get("/catchup/play/:id", handlers.CatchupPlayerHandler)
+	app.Get("/catchup/render/:id", handlers.CatchupRenderPlayerHandler)
+	app.Get("/catchup/stream/:id", handlers.CatchupStreamHandler)
 
 	app.Get("/render.mpd", handlers.MpdHandler)
 	app.Use("/render.dash", handlers.DashHandler)

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 	"reflect"
@@ -39,7 +40,13 @@ type JioTVConfig struct {
 	// DefaultCategories is the list of category IDs to display on the default web page. Default: []
 	DefaultCategories []int `yaml:"default_categories" env:"JIOTV_DEFAULT_CATEGORIES" json:"default_categories" toml:"default_categories"`
 	// DefaultLanguages is the list of language IDs to display on the default web page. Default: []
+	// DefaultLanguages is the list of language IDs to display on the default web page. Default: []
 	DefaultLanguages []int `yaml:"default_languages" env:"JIOTV_DEFAULT_LANGUAGES" json:"default_languages" toml:"default_languages"`
+}
+
+// LoginConfig defines the configuration for login
+type LoginConfig struct {
+	MobileNumber string `json:"mobile_number"`
 }
 
 // Cfg is the global config variable
@@ -89,4 +96,21 @@ func commonFileExists() string {
 		}
 	}
 	return ""
+}
+
+// LoadLoginConfig loads the login configuration from config_login.json
+func LoadLoginConfig() (*LoginConfig, error) {
+	file, err := os.Open("config_login.json")
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	config := &LoginConfig{}
+	err = decoder.Decode(config)
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
 }

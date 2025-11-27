@@ -100,6 +100,26 @@ func isCustomChannel(channelID string) bool {
 	return false
 }
 
+// getChannelCatchupSupport checks if a channel supports catchup
+func getChannelCatchupSupport(channelID string) bool {
+	// Fetch all channels
+	channelsResponse, err := television.Channels()
+	if err != nil {
+		utils.Log.Printf("Error fetching channels: %v", err)
+		return false
+	}
+
+	// Find the channel by ID
+	for _, channel := range channelsResponse.Result {
+		if channel.ID == channelID {
+			return channel.IsCatchupAvailable
+		}
+	}
+
+	// Default to false if channel not found
+	return false
+}
+
 // IndexHandler handles the index page for `/` route
 func IndexHandler(c *fiber.Ctx) error {
 	// Get all channels
@@ -125,6 +145,7 @@ func IndexHandler(c *fiber.Ctx) error {
 	}
 
 	// Context data for index page
+	// Context data for index page
 	indexContext := fiber.Map{
 		"Title":         Title,
 		"Channels":      nil,
@@ -137,6 +158,12 @@ func IndexHandler(c *fiber.Ctx) error {
 			"medium": "Medium",
 			"low":    "Low",
 		},
+	}
+
+	// Load login config to get default mobile number
+	loginConfig, err := config.LoadLoginConfig()
+	if err == nil && loginConfig.MobileNumber != "" {
+		indexContext["MobileNumber"] = loginConfig.MobileNumber
 	}
 
 	// Filter channels by query params if provided
@@ -323,7 +350,9 @@ func RenderHandler(c *fiber.Ctx) error {
 		decoded_url = decoded_url + sep + "hdnea=" + hdnea
 	}
 
+	fmt.Printf("Render Decoded URL: %s\n", decoded_url)
 	renderResult, statusCode, newHdnea := TV.Render(decoded_url)
+	fmt.Printf("Render Status Code: %d\n", statusCode)
 
 	// If we get a 403 (Forbidden), try refreshing tokens and retry once
 	if statusCode == fiber.StatusForbidden {
@@ -549,8 +578,17 @@ func ChannelsHandler(c *fiber.Ctx) error {
 			default:
 				groupTitle = television.CategoryMap[channel.Category]
 			}
-			m3uContent += fmt.Sprintf("#EXTINF:-1 tvg-id=%q tvg-name=%q tvg-logo=%q tvg-language=%q tvg-type=%q group-title=%q, %s\n%s\n",
-				channel.ID, channel.Name, channelLogoURL, television.LanguageMap[channel.Language], television.CategoryMap[channel.Category], groupTitle, channel.Name, channelURL)
+
+			// Build catchup attributes if channel supports catchup
+			var catchupAttrs string
+			if channel.IsCatchupAvailable {
+				// Catchup source URL pattern for IPTV players
+				// Uses standard catchup variables: ${catchup-id}, ${start}, ${stop}
+				catchupSource := fmt.Sprintf("%s/catchup/render/%s?start=${start}&end=${stop}", hostURL, channel.ID)
+				catchupAttrs = fmt.Sprintf(` catchup="append" catchup-days="7" catchup-source="%s"`, catchupSource)
+			}
+			m3uContent += fmt.Sprintf("#EXTINF:-1 tvg-id=%q tvg-name=%q tvg-logo=%q tvg-language=%q tvg-type=%q group-title=%q%s, %s\n%s\n",
+				channel.ID, channel.Name, channelLogoURL, television.LanguageMap[channel.Language], television.CategoryMap[channel.Category], groupTitle, catchupAttrs, channel.Name, channelURL)
 		}
 
 		// Set the Content-Disposition header for file download
@@ -606,9 +644,10 @@ func PlayHandler(c *fiber.Ctx) error {
 	}
 	internalUtils.SetCacheHeader(c, 3600)
 	return c.Render("views/play", fiber.Map{
-		"Title":      Title,
-		"player_url": player_url,
-		"ChannelID":  id,
+		"Title":              Title,
+		"player_url":         player_url,
+		"ChannelID":          id,
+		"IsCatchupAvailable": getChannelCatchupSupport(id),
 	})
 }
 
@@ -646,4 +685,107 @@ func ImageHandler(c *fiber.Ctx) error {
 
 func DASHTimeHandler(c *fiber.Ctx) error {
 	return c.SendString(time.Now().UTC().Format("2006-01-02T15:04:05.000Z"))
+}
+
+// ChannelPlaylistRedirectHandler redirects to the export URL with the correct filename
+func ChannelPlaylistRedirectHandler(c *fiber.Ctx) error {
+	id := c.Params("id")
+
+	// Fetch all channels to find the specific one
+	apiResponse, err := television.Channels()
+	if err != nil {
+		return ErrorMessageHandler(c, err)
+	}
+
+	var targetChannel *television.Channel
+	for i := range apiResponse.Result {
+		if apiResponse.Result[i].ID == id {
+			targetChannel = &apiResponse.Result[i]
+			break
+		}
+	}
+
+	if targetChannel == nil {
+		return internalUtils.NotFoundError(c, "Channel not found")
+	}
+
+	// Sanitize filename
+	filename := strings.ReplaceAll(targetChannel.Name, " ", "_")
+	filename = strings.ReplaceAll(filename, "/", "-")
+	filename = fmt.Sprintf("%s.m3u8", filename)
+
+	// Redirect to the export URL with the filename and ID
+	return c.Redirect(fmt.Sprintf("/playlist/export/%s?id=%s", filename, id), fiber.StatusFound)
+}
+
+// ChannelPlaylistExportHandler generates M3U playlist for a single channel
+func ChannelPlaylistExportHandler(c *fiber.Ctx) error {
+	id := c.Query("id")
+	if id == "" {
+		// Fallback: try to get ID from filename param if query is missing
+		// This handles cases where the ID is passed as the filename (e.g. /playlist/export/143.m3u8)
+		val := c.Params("filename")
+		if val != "" {
+			id = strings.TrimSuffix(val, ".m3u8")
+		}
+	}
+
+	quality := c.Query("q")
+
+	// Fetch all channels to find the specific one
+	apiResponse, err := television.Channels()
+	if err != nil {
+		return ErrorMessageHandler(c, err)
+	}
+
+	var targetChannel *television.Channel
+	for i := range apiResponse.Result {
+		if apiResponse.Result[i].ID == id {
+			targetChannel = &apiResponse.Result[i]
+			break
+		}
+	}
+
+	if targetChannel == nil {
+		return internalUtils.NotFoundError(c, "Channel not found")
+	}
+
+	hostURL := strings.ToLower(c.Protocol()) + "://" + c.Hostname()
+	m3uContent := "#EXTM3U x-tvg-url=\"" + hostURL + "/epg.xml.gz\"\n"
+
+	var channelURL string
+	if quality != "" {
+		channelURL = fmt.Sprintf("%s/live/%s/%s.m3u8", hostURL, quality, targetChannel.ID)
+	} else {
+		channelURL = fmt.Sprintf("%s/live/%s.m3u8", hostURL, targetChannel.ID)
+	}
+
+	// Logo handling
+	var channelLogoURL string
+	if strings.HasPrefix(targetChannel.LogoURL, "http://") || strings.HasPrefix(targetChannel.LogoURL, "https://") {
+		channelLogoURL = targetChannel.LogoURL
+	} else {
+		channelLogoURL = fmt.Sprintf("%s/jtvimage/%s", hostURL, targetChannel.LogoURL)
+	}
+
+	// Group Title
+	groupTitle := television.CategoryMap[targetChannel.Category]
+
+	// Catchup attributes
+	var catchupAttrs string
+	if targetChannel.IsCatchupAvailable {
+		catchupSource := fmt.Sprintf("%s/catchup/render/%s?start=${start}&end=${stop}", hostURL, targetChannel.ID)
+		catchupAttrs = fmt.Sprintf(` catchup="append" catchup-days="7" catchup-source="%s"`, catchupSource)
+	}
+
+	m3uContent += fmt.Sprintf("#EXTINF:-1 tvg-id=%q tvg-name=%q tvg-logo=%q tvg-language=%q tvg-type=%q group-title=%q%s, %s\n%s\n",
+		targetChannel.ID, targetChannel.Name, channelLogoURL, television.LanguageMap[targetChannel.Language], television.CategoryMap[targetChannel.Category], groupTitle, catchupAttrs, targetChannel.Name, channelURL)
+
+	// Sanitize filename for Content-Disposition (double check)
+	filename := strings.ReplaceAll(targetChannel.Name, " ", "_")
+	filename = strings.ReplaceAll(filename, "/", "-")
+
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.m3u8\"", filename))
+	c.Set("Content-Type", "application/vnd.apple.mpegurl")
+	return c.SendString(m3uContent)
 }

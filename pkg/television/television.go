@@ -268,6 +268,9 @@ func (tv *Television) Render(url string) ([]byte, int, string) {
 	for key, value := range tv.Headers {
 		req.Header.Set(key, value)
 	}
+	if tv.SsoToken != "" {
+		req.Header.Set("ssotoken", tv.SsoToken)
+	}
 
 	// If hdnea is provided as query param on URL, also send it as cookie __hdnea__ per downstream requirement
 	if strings.Contains(url, "hdnea=") {
@@ -685,4 +688,108 @@ func getSLChannel(channelID string) (*LiveURLOutput, error) {
 		// If the channel is not available in the SONY_CHANNELS map, then return an error
 		return nil, fmt.Errorf("Channel not found")
 	}
+}
+
+// GetCatchupURL fetches the signed playback URL and token for catchup content
+func (tv *Television) GetCatchupURL(channelID, srno, start, end string) (*LiveURLOutput, error) {
+	formData := fasthttp.AcquireArgs()
+	defer fasthttp.ReleaseArgs(formData)
+
+	formData.Add("stream_type", "Catchup")
+	formData.Add("channel_id", channelID)
+	formData.Add("programId", srno)
+	formData.Add("showtime", "000000")
+	formData.Add("srno", srno)
+	formData.Add("begin", start)
+	formData.Add("end", end)
+
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	// Copy headers from the Television headers map to the request
+	for key, value := range tv.Headers {
+		req.Header.Set(key, value)
+	}
+
+	// Always use the v1.1 API endpoint
+	url := "https://" + JIOTV_API_DOMAIN + urls.PlaybackAPIPath
+	req.Header.Set(headers.AccessToken, tv.AccessToken)
+	req.SetRequestURI(url)
+	req.Header.SetMethod("POST")
+
+	// Encode the form data and set it as the request body
+	req.SetBody(formData.QueryString())
+
+	req.Header.Set("channel_id", channelID)
+	req.Header.Set("srno", srno)
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	// Perform the HTTP POST request
+	if err := tv.Client.Do(req, resp); err != nil {
+		if strings.Contains(err.Error(), "server closed connection before returning the first response byte") {
+			utils.Log.Println("Retrying the catchup request...")
+			return tv.GetCatchupURL(channelID, srno, start, end)
+		}
+		utils.Log.Panic(err)
+		return nil, err
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		response := string(resp.Body())
+		utils.Log.Printf("Catchup request failed with status code: %d", resp.StatusCode())
+		utils.Log.Println("Request headers:", req.Header.String())
+		utils.Log.Println("Request data:", formData.String())
+		utils.Log.Printf("API Response: %s", response)
+
+		// Parse response to check for specific error codes
+		var errorResp map[string]interface{}
+		if err := json.Unmarshal(resp.Body(), &errorResp); err == nil {
+			if code, ok := errorResp["code"].(float64); ok {
+				utils.Log.Printf("API Error Code: %.0f", code)
+			}
+			if message, ok := errorResp["message"].(string); ok {
+				utils.Log.Printf("API Error Message: %s", message)
+			}
+		}
+
+		return nil, fmt.Errorf("catchup request failed with status code: %d", resp.StatusCode())
+	}
+
+	var result LiveURLOutput
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		utils.Log.Panic(err)
+		return nil, err
+	}
+
+	// Extract hdnea from the result URL
+	// The result URL from geturl for catchup usually looks like:
+	// https://jiotvcod.cdn.jio.com/bpk-tv/.../Catchup_Fallback/...?vbegin=...&vend=...&hdnea=...
+	// Or sometimes it's in the query params.
+
+	extractHdneaFromURL := func(u string) string {
+		if u == "" {
+			return ""
+		}
+		idx := strings.Index(u, "hdnea=")
+		if idx == -1 {
+			return ""
+		}
+		// token starts after hdnea=
+		token := u[idx+len("hdnea="):]
+		if i := strings.IndexByte(token, '&'); i != -1 {
+			token = token[:i]
+		}
+		return token
+	}
+
+	// Check result field
+	hdnea := extractHdneaFromURL(result.Result)
+	if hdnea == "" {
+		// Try Bitrates.Auto if result is empty or no token
+		hdnea = extractHdneaFromURL(result.Bitrates.Auto)
+	}
+	result.Hdnea = hdnea
+
+	return &result, nil
 }

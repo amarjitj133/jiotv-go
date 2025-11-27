@@ -54,8 +54,12 @@ const onQualityChange = (elem) => {
   
   for (let i = 0; i < playElems.length; i++) {
     const cardElem = playElems[i];
-    const href = cardElem.getAttribute("href");
-    cardElem.setAttribute("href", href.split("?")[0] + "?" + currentParams.toString());
+    // Find the anchor tag inside the card
+    const anchor = cardElem.querySelector("a.play-link");
+    if (anchor) {
+        const href = anchor.getAttribute("href");
+        anchor.setAttribute("href", href.split("?")[0] + "?" + currentParams.toString());
+    }
   }
 };
 
@@ -126,7 +130,7 @@ function displayFavoriteChannels() {
     favoriteChannelsSection.style.display = 'none';
   }
 
-  const allChannelCards = document.querySelectorAll('a.card[data-channel-id]');
+  const allChannelCards = document.querySelectorAll('.card[data-channel-id]');
 
   // Create DocumentFragments to batch DOM updates
   const favoriteFragment = document.createDocumentFragment();

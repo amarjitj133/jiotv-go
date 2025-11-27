@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jiotv-go/jiotv_go/v3/internal/config"
 	"github.com/jiotv-go/jiotv_go/v3/internal/constants/headers"
 	"github.com/jiotv-go/jiotv_go/v3/internal/constants/urls"
 	internalUtils "github.com/jiotv-go/jiotv_go/v3/internal/utils"
@@ -122,6 +123,12 @@ func LoginSendOTPHandler(c *fiber.Ctx) error {
 		return internalUtils.BadRequestError(c, "Invalid JSON")
 	}
 	mobileNumber := formBody.MobileNumber
+	if mobileNumber == "" {
+		loginConfig, err := config.LoadLoginConfig()
+		if err == nil && loginConfig.MobileNumber != "" {
+			mobileNumber = loginConfig.MobileNumber
+		}
+	}
 	if err := internalUtils.CheckFieldExist(c, "Mobile Number", mobileNumber != ""); err != nil {
 		return err
 	}
