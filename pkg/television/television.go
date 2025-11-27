@@ -786,7 +786,7 @@ func (tv *Television) GetCatchupURL(channelID, srno, start, end string) (*LiveUR
 			utils.Log.Println("Retrying the catchup request...")
 			return tv.GetCatchupURL(channelID, srno, start, end)
 		}
-		utils.Log.Panic(err)
+		utils.Log.Println(err)
 		return nil, err
 	}
 	if resp.StatusCode() != fasthttp.StatusOK {

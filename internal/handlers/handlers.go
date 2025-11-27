@@ -35,6 +35,9 @@ const (
 	REFRESH_SSO_TOKEN_URL = urls.RefreshSSOTokenURL
 	PLAYER_USER_AGENT     = headers.UserAgentPlayTV
 	REQUEST_USER_AGENT    = headers.UserAgentOkHttp
+	HDNEA_PARAM           = "hdnea="
+	PLAYER_ROUTE_PREFIX   = "/player/"
+	VIEWS_INDEX           = "views/index"
 )
 
 // Init initializes the necessary operations required for the handlers to work.
@@ -154,7 +157,7 @@ func IndexHandler(c *fiber.Ctx) error {
 	category := c.Query("category")
 
 	// Process logo URLs for all channels
-	hostURL := c.Protocol() + "://" + c.Hostname()
+	hostURL := c.Protocol() + "://" + c.Get("Host")
 	for i, channel := range channels.Result {
 		if strings.HasPrefix(channel.LogoURL, "http://") || strings.HasPrefix(channel.LogoURL, "https://") {
 			// Custom channel with full URL, use as-is
@@ -198,19 +201,19 @@ func IndexHandler(c *fiber.Ctx) error {
 		}
 		channels_list := television.FilterChannels(channels.Result, language_int, category_int)
 		indexContext["Channels"] = channels_list
-		return c.Render("views/index", indexContext)
+		return c.Render(VIEWS_INDEX, indexContext)
 	}
 
 	// If no query parameters are provided, use default config filtering
 	if len(config.Cfg.DefaultCategories) > 0 || len(config.Cfg.DefaultLanguages) > 0 {
 		channels_list := television.FilterChannelsByDefaults(channels.Result, config.Cfg.DefaultCategories, config.Cfg.DefaultLanguages)
 		indexContext["Channels"] = channels_list
-		return c.Render("views/index", indexContext)
+		return c.Render(VIEWS_INDEX, indexContext)
 	}
 
 	// If no query params and no default config, return all channels
 	indexContext["Channels"] = channels.Result
-	return c.Render("views/index", indexContext)
+	return c.Render(VIEWS_INDEX, indexContext)
 }
 
 // checkFieldExist checks if the field is provided in the request.
@@ -263,12 +266,12 @@ func LiveHandler(c *fiber.Ctx) error {
 	// It is required to quote the url as it may contain special characters like ? and &
 	// Ensure hdnea from Live is appended to subsequent requests
 	liveURL := liveResult.Bitrates.Auto
-	if liveResult.Hdnea != "" && !strings.Contains(liveURL, "hdnea=") {
+	if liveResult.Hdnea != "" && !strings.Contains(liveURL, HDNEA_PARAM) {
 		sep := "?"
 		if strings.Contains(liveURL, "?") {
 			sep = "&"
 		}
-		liveURL = liveURL + sep + "hdnea=" + liveResult.Hdnea
+		liveURL = liveURL + sep + HDNEA_PARAM + liveResult.Hdnea
 	}
 
 	coded_url, err := secureurl.EncryptURL(liveURL)
@@ -328,12 +331,12 @@ func LiveQualityHandler(c *fiber.Ctx) error {
 
 	// select quality level based on query parameter
 	liveURL := internalUtils.SelectQuality(quality, Bitrates.Auto, Bitrates.High, Bitrates.Medium, Bitrates.Low)
-	if liveResult.Hdnea != "" && !strings.Contains(liveURL, "hdnea=") {
+	if liveResult.Hdnea != "" && !strings.Contains(liveURL, HDNEA_PARAM) {
 		sep := "?"
 		if strings.Contains(liveURL, "?") {
 			sep = "&"
 		}
-		liveURL = liveURL + sep + "hdnea=" + liveResult.Hdnea
+		liveURL = liveURL + sep + HDNEA_PARAM + liveResult.Hdnea
 	}
 
 	// quote url as it will be passed as a query parameter
@@ -370,12 +373,12 @@ func RenderHandler(c *fiber.Ctx) error {
 	}
 
 	// If hdnea is present in query and missing in the decrypted URL, append it so TV.Render can forward as request cookie upstream
-	if hdnea := c.Query("hdnea"); hdnea != "" && !strings.Contains(decoded_url, "hdnea=") {
+	if hdnea := c.Query("hdnea"); hdnea != "" && !strings.Contains(decoded_url, HDNEA_PARAM) {
 		sep := "?"
 		if strings.Contains(decoded_url, "?") {
 			sep = "&"
 		}
-		decoded_url = decoded_url + sep + "hdnea=" + hdnea
+		decoded_url = decoded_url + sep + HDNEA_PARAM + hdnea
 	}
 
 	renderResult, statusCode, newHdnea := TV.Render(decoded_url)
@@ -405,18 +408,18 @@ func RenderHandler(c *fiber.Ctx) error {
 	params := split_url_by_params[1]
 	// If upstream rotated __hdnea__, update params so rewritten URLs carry the fresh token value
 	if newHdnea != "" {
-		if strings.Contains(params, "hdnea=") {
+		if strings.Contains(params, HDNEA_PARAM) {
 			parts := strings.Split(params, "&")
 			for i, p := range parts {
-				if strings.HasPrefix(p, "hdnea=") {
-					parts[i] = "hdnea=" + newHdnea
+				if strings.HasPrefix(p, HDNEA_PARAM) {
+					parts[i] = HDNEA_PARAM + newHdnea
 					break
 				}
 			}
 			params = strings.Join(parts, "&")
 		} else {
 			if params == "" {
-				params = "hdnea=" + newHdnea
+				params = HDNEA_PARAM + newHdnea
 			} else {
 				params = params + "&hdnea=" + newHdnea
 			}
@@ -511,10 +514,10 @@ func RenderKeyHandler(c *fiber.Ctx) error {
 		c.Request().Header.SetCookie(key, value)
 	}
 	// ensure __hdnea__ cookie exists if available from params
-	if strings.Contains(params, "hdnea=") {
+	if strings.Contains(params, HDNEA_PARAM) {
 		for _, p := range strings.Split(params, "&") {
-			if strings.HasPrefix(p, "hdnea=") {
-				c.Request().Header.SetCookie("__hdnea__", strings.TrimPrefix(p, "hdnea="))
+			if strings.HasPrefix(p, HDNEA_PARAM) {
+				c.Request().Header.SetCookie("__hdnea__", strings.TrimPrefix(p, HDNEA_PARAM))
 				break
 			}
 		}
@@ -569,7 +572,7 @@ func ChannelsHandler(c *fiber.Ctx) error {
 		apiResponse.Result = append(apiResponse.Result, pluginChannels...)
 	}
 	// hostUrl should be request URL like http://localhost:5001
-	hostURL := strings.ToLower(c.Protocol()) + "://" + c.Hostname()
+	hostURL := strings.ToLower(c.Protocol()) + "://" + c.Get("Host")
 
 	// Check if the query parameter "type" is set to "m3u"
 	if c.Query("type") == "m3u" {
@@ -671,17 +674,17 @@ func PlayHandler(c *fiber.Ctx) error {
 				player_url = "/mpd/" + id + "?q=" + quality
 			} else {
 				// if not, use HLS player
-				player_url = "/player/" + id + "?q=" + quality
+				player_url = PLAYER_ROUTE_PREFIX + id + "?q=" + quality
 			}
 		} else if isCustomChannel(id) {
-			player_url = "/player/" + id + "?q=" + quality
+			player_url = PLAYER_ROUTE_PREFIX + id + "?q=" + quality
 		} else if _, exists := getPluginChannel(id); exists {
-			player_url = "/player/" + id + "?q=" + quality
+			player_url = PLAYER_ROUTE_PREFIX + id + "?q=" + quality
 		} else {
 			player_url = "/mpd/" + id + "?q=" + quality
 		}
 	} else {
-		player_url = "/player/" + id + "?q=" + quality
+		player_url = PLAYER_ROUTE_PREFIX + id + "?q=" + quality
 	}
 	internalUtils.SetCacheHeader(c, 3600)
 	return c.Render("views/play", fiber.Map{
@@ -858,7 +861,7 @@ func ChannelPlaylistExportHandler(c *fiber.Ctx) error {
 		return internalUtils.NotFoundError(c, "Channel not found")
 	}
 
-	hostURL := strings.ToLower(c.Protocol()) + "://" + c.Hostname()
+	hostURL := strings.ToLower(c.Protocol()) + "://" + c.Get("Host")
 	m3uContent := "#EXTM3U x-tvg-url=\"" + hostURL + "/epg.xml.gz\"\n"
 
 	var channelURL string

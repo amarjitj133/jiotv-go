@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	catchupEPGURL   = "https://jiotvapi.cdn.jio.com/apis/v1.3/getepg/get?offset=%d&channel_id=%s&langId=6"
+	catchupEPGURL   = "https://jiotvapi.cdn.jio.com/apis/v1.3/getepg/get?offset=%d&channel_id=%s&langId=%d"
 	okhttpUserAgent = "okhttp/4.12.13"
+	defaultLangID   = 6
 )
 
 // CatchupHandler renders the catchup UI for a specific channel
@@ -198,7 +199,7 @@ func CatchupRenderPlayerHandler(c *fiber.Ctx) error {
 
 // Helper to fetch EPG
 func getCatchupEPG(id string, offset int) ([]map[string]interface{}, error) {
-	url := fmt.Sprintf(catchupEPGURL, offset, id)
+	url := fmt.Sprintf(catchupEPGURL, offset, id, defaultLangID)
 
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)

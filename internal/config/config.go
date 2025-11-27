@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"path/filepath"
 	"reflect"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -101,7 +102,11 @@ func commonFileExists() string {
 
 // LoadLoginConfig loads the login configuration from config_login.json
 func LoadLoginConfig() (*LoginConfig, error) {
-	file, err := os.Open("config_login.json")
+	path := "config_login.json"
+	if Cfg.PathPrefix != "" {
+		path = filepath.Join(Cfg.PathPrefix, "config_login.json")
+	}
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
