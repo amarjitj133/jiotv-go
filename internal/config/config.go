@@ -40,8 +40,9 @@ type JioTVConfig struct {
 	// DefaultCategories is the list of category IDs to display on the default web page. Default: []
 	DefaultCategories []int `yaml:"default_categories" env:"JIOTV_DEFAULT_CATEGORIES" json:"default_categories" toml:"default_categories"`
 	// DefaultLanguages is the list of language IDs to display on the default web page. Default: []
-	// DefaultLanguages is the list of language IDs to display on the default web page. Default: []
 	DefaultLanguages []int `yaml:"default_languages" env:"JIOTV_DEFAULT_LANGUAGES" json:"default_languages" toml:"default_languages"`
+	// Plugins is the list of plugins to load. Default: []
+	Plugins []string `yaml:"plugins" env:"JIOTV_PLUGINS" json:"plugins" toml:"plugins"`
 }
 
 // LoginConfig defines the configuration for login

@@ -30,8 +30,13 @@
         seekable: true,
         retry: true,
         autoplay: false,
-        qsel: {},
-        asel: {},
+        qsel: {
+          enabled: true,
+          default: "max"  // Default to highest quality instead of adaptive
+        },
+        asel: {
+          enabled: true
+        },
         ui: flowplayer.ui.USE_THIN_CONTROLBAR,
       });
       player.on(flowplayer.events.FULLSCREEN_ENTER, (e) => {

@@ -11,6 +11,7 @@ import (
 	"github.com/jiotv-go/jiotv_go/v3/internal/config"
 	"github.com/jiotv-go/jiotv_go/v3/internal/constants/headers"
 	"github.com/jiotv-go/jiotv_go/v3/internal/constants/urls"
+	"github.com/jiotv-go/jiotv_go/v3/internal/plugins"
 	internalUtils "github.com/jiotv-go/jiotv_go/v3/internal/utils"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/secureurl"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/television"
@@ -86,6 +87,21 @@ func ErrorMessageHandler(c *fiber.Ctx, err error) error {
 	return nil
 }
 
+// getPluginChannel checks if a channel ID belongs to a plugin
+func getPluginChannel(id string) (*television.Channel, bool) {
+	if len(config.Cfg.Plugins) > 0 {
+		channels := plugins.GetChannels()
+		for _, ch := range channels {
+			if ch.ID == id {
+				return &ch, true
+			}
+		}
+	} else {
+		utils.Log.Println("No plugins enabled or config.Cfg.Plugins is empty")
+	}
+	return nil, false
+}
+
 // isCustomChannel checks if a given channel ID is a custom channel
 func isCustomChannel(channelID string) bool {
 	if config.Cfg.CustomChannelsFile == "" {
@@ -126,6 +142,11 @@ func IndexHandler(c *fiber.Ctx) error {
 	channels, err := television.Channels()
 	if err != nil {
 		return ErrorMessageHandler(c, err)
+	}
+
+	if len(config.Cfg.Plugins) > 0 {
+		pluginChannels := plugins.GetChannels()
+		channels.Result = append(channels.Result, pluginChannels...)
 	}
 
 	// Get language and category from query params
@@ -216,6 +237,10 @@ func LiveHandler(c *fiber.Ctx) error {
 		return c.Redirect(channel.URL, fiber.StatusFound)
 	}
 
+	if channel, exists := getPluginChannel(id); exists {
+		return c.Redirect("/"+channel.URL, fiber.StatusFound)
+	}
+
 	// For regular JioTV channels, ensure tokens are fresh before making API call
 	if err := EnsureFreshTokens(); err != nil {
 		utils.Log.Printf("Failed to ensure fresh tokens: %v", err)
@@ -276,6 +301,10 @@ func LiveQualityHandler(c *fiber.Ctx) error {
 		}
 		// For custom channels, redirect directly to the m3u8 URL (no render pipeline needed)
 		return c.Redirect(channel.URL, fiber.StatusFound)
+	}
+
+	if channel, exists := getPluginChannel(id); exists {
+		return c.Redirect("/"+channel.URL, fiber.StatusFound)
 	}
 
 	// For regular JioTV channels, ensure tokens are fresh before making API call
@@ -537,6 +566,11 @@ func ChannelsHandler(c *fiber.Ctx) error {
 	if err != nil {
 		return ErrorMessageHandler(c, err)
 	}
+
+	if len(config.Cfg.Plugins) > 0 {
+		pluginChannels := plugins.GetChannels()
+		apiResponse.Result = append(apiResponse.Result, pluginChannels...)
+	}
 	// hostUrl should be request URL like http://localhost:5001
 	hostURL := strings.ToLower(c.Protocol()) + "://" + c.Hostname()
 
@@ -556,10 +590,14 @@ func ChannelsHandler(c *fiber.Ctx) error {
 			}
 
 			var channelURL string
-			if quality != "" {
-				channelURL = fmt.Sprintf("%s/live/%s/%s.m3u8", hostURL, quality, channel.ID)
+			if !channel.IsCustom {
+				if quality != "" {
+					channelURL = fmt.Sprintf("%s/live/%s/%s.m3u8", hostURL, quality, channel.ID)
+				} else {
+					channelURL = fmt.Sprintf("%s/live/%s.m3u8", hostURL, channel.ID)
+				}
 			} else {
-				channelURL = fmt.Sprintf("%s/live/%s.m3u8", hostURL, channel.ID)
+				channelURL = fmt.Sprintf("%s/%s", hostURL, channel.URL)
 			}
 			var channelLogoURL string
 			if strings.HasPrefix(channel.LogoURL, "http://") || strings.HasPrefix(channel.LogoURL, "https://") {
@@ -582,9 +620,11 @@ func ChannelsHandler(c *fiber.Ctx) error {
 			// Build catchup attributes if channel supports catchup
 			var catchupAttrs string
 			if channel.IsCatchupAvailable {
-				// Catchup source URL pattern for IPTV players
-				// Uses standard catchup variables: ${catchup-id}, ${start}, ${stop}
+				// Enhanced catchup source URL pattern for IPTV players (Tivimate/OTT Navigator compatible)
+				// Uses standard catchup variables: ${catchup-id}, ${start}, ${stop} (or ${timestamp}, ${duration})
+				// Format optimized for TiviMate and OTT Navigator
 				catchupSource := fmt.Sprintf("%s/catchup/render/%s?start=${start}&end=${stop}", hostURL, channel.ID)
+				// Use "append" mode for better compatibility, with 7 days catchup
 				catchupAttrs = fmt.Sprintf(` catchup="append" catchup-days="7" catchup-source="%s"`, catchupSource)
 			}
 			m3uContent += fmt.Sprintf("#EXTINF:-1 tvg-id=%q tvg-name=%q tvg-logo=%q tvg-language=%q tvg-type=%q group-title=%q%s, %s\n%s\n",
@@ -598,7 +638,9 @@ func ChannelsHandler(c *fiber.Ctx) error {
 	}
 
 	for i, channel := range apiResponse.Result {
-		apiResponse.Result[i].URL = fmt.Sprintf("%s/live/%s", hostURL, channel.ID)
+		if !channel.IsCustom {
+			apiResponse.Result[i].URL = fmt.Sprintf("%s/live/%s", hostURL, channel.ID)
+		}
 	}
 
 	return c.JSON(apiResponse)
@@ -636,6 +678,8 @@ func PlayHandler(c *fiber.Ctx) error {
 			}
 		} else if isCustomChannel(id) {
 			player_url = "/player/" + id + "?q=" + quality
+		} else if _, exists := getPluginChannel(id); exists {
+			player_url = "/player/" + id + "?q=" + quality
 		} else {
 			player_url = "/mpd/" + id + "?q=" + quality
 		}
@@ -656,6 +700,12 @@ func PlayerHandler(c *fiber.Ctx) error {
 	id := c.Params("id")
 	quality := c.Query("q")
 	play_url := utils.BuildHLSPlayURL(quality, id)
+	if channel, exists := getPluginChannel(id); exists {
+		// Use absolute URL for player to ensure it works across different contexts
+		hostURL := c.BaseURL()
+		// Always serve .m3u8 URL without quality parameter - let the player's qsel handle quality selection
+		play_url = fmt.Sprintf("%s/%s.m3u8", hostURL, channel.URL)
+	}
 	internalUtils.SetCacheHeader(c, 3600)
 	return c.Render("views/player_hls", fiber.Map{
 		"play_url": play_url,

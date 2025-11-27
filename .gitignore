@@ -33,6 +33,18 @@ credentials.json
 jiotv_credentials.json
 jiotv_credentials_v2.json
 .jiotv_go
+config_login.json
+
+# Token and session files
+*token*.json
+*session*.json
+.tokens/
+tokens/
+
+# Cache files
+*.cache
+.cache/
+cache/
 
 # Playlist .m3u file
 *.m3u
@@ -45,6 +57,8 @@ web/coverage/
 # Logs
 jiotv_go.log
 jiotv_go*.log
+server.log
+*.log
 
 # EPG
 epg.xml.gz
