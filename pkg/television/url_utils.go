@@ -2,6 +2,7 @@ package television
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jiotv-go/jiotv_go/v3/pkg/secureurl"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/utils"
@@ -20,7 +21,11 @@ type EncryptedURLConfig struct {
 
 // CreateEncryptedURL creates an encrypted URL with auth parameters for various endpoints
 func CreateEncryptedURL(config EncryptedURLConfig) ([]byte, error) {
-	fullURL := config.BaseURL + config.Match + "?" + config.Params
+	separator := "?"
+	if strings.Contains(config.Match, "?") {
+		separator = "&"
+	}
+	fullURL := config.BaseURL + config.Match + separator + config.Params
 
 	encryptedURL, err := secureurl.EncryptURL(fullURL)
 	if err != nil {

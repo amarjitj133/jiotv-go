@@ -138,9 +138,9 @@ func CatchupStreamHandler(c *fiber.Ctx) error {
 		return internalUtils.InternalServerError(c, err)
 	}
 
-	targetURL := catchupResult.Result
+	targetURL := catchupResult.Bitrates.Auto
 	if targetURL == "" {
-		targetURL = catchupResult.Bitrates.Auto
+		targetURL = catchupResult.Result
 	}
 	if targetURL == "" {
 		return internalUtils.InternalServerError(c, fmt.Errorf("failed to get catchup URL from API"))
@@ -169,7 +169,7 @@ func CatchupPlayerHandler(c *fiber.Ctx) error {
 	episodePoster := c.Query("poster", "")
 	showTime := c.Query("showtime", "")
 
-	playerURL := fmt.Sprintf("/catchup/render/%s?start=%s&end=%s&srno=%s", id, start, end, srno)
+	playerURL := fmt.Sprintf("/catchup/render/%s?start=%s&end=%s&srno=%s&v=6", id, start, end, srno)
 
 	return c.Render("views/catchup_player", fiber.Map{
 		"Title":         Title,
@@ -188,8 +188,12 @@ func CatchupRenderPlayerHandler(c *fiber.Ctx) error {
 	start := c.Query("start")
 	end := c.Query("end")
 	srno := c.Query("srno")
+	quality := c.Query("q", "")
 
 	playURL := fmt.Sprintf("/catchup/stream/%s?start=%s&end=%s&srno=%s", id, start, end, srno)
+	if quality != "" {
+		playURL += "&q=" + quality
+	}
 
 	return c.Render("views/player_hls", fiber.Map{
 		"play_url":   playURL,

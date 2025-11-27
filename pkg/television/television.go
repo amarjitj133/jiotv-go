@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -814,6 +815,22 @@ func (tv *Television) GetCatchupURL(channelID, srno, start, end string) (*LiveUR
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
 		utils.Log.Panic(err)
 		return nil, err
+	}
+	// Debug logging to file
+	debugMsg := fmt.Sprintf("Catchup API Response - Result: %s, Auto: %s, High: %s, Medium: %s, Low: %s\n",
+		result.Result, result.Bitrates.Auto, result.Bitrates.High, result.Bitrates.Medium, result.Bitrates.Low)
+	if f, err := os.OpenFile("/tmp/catchup_response.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		f.WriteString(debugMsg)
+		f.Close()
+	}
+
+	// Fetch the actual m3u8 to check if it has variants
+	if result.Bitrates.Auto != "" {
+		testContent, _, _ := tv.Render(result.Bitrates.Auto)
+		if f, err := os.OpenFile("/tmp/catchup_master_playlist.m3u8", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			f.Write(testContent)
+			f.Close()
+		}
 	}
 
 	// Extract hdnea from the result URL

@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -430,11 +431,11 @@ func RenderHandler(c *fiber.Ctx) error {
 	// More info: https://golang.org/pkg/regexp/#Regexp.ReplaceAllFunc
 	replacer := func(match []byte) []byte {
 		switch {
-		case bytes.HasSuffix(match, []byte(".m3u8")):
+		case bytes.Contains(match, []byte(".m3u8")):
 			return television.ReplaceM3U8(baseUrl, match, params, channel_id, c.Query("q"))
-		case bytes.HasSuffix(match, []byte(".ts")):
+		case bytes.Contains(match, []byte(".ts")):
 			return television.ReplaceTS(baseUrl, match, params)
-		case bytes.HasSuffix(match, []byte(".aac")):
+		case bytes.Contains(match, []byte(".aac")):
 			return television.ReplaceAAC(baseUrl, match, params)
 		default:
 			return match
@@ -442,8 +443,14 @@ func RenderHandler(c *fiber.Ctx) error {
 	}
 
 	// Pattern to match file names ending with .m3u8 and .ts
-	pattern = `[a-z0-9=\_\-A-Z\/\.]*\.(m3u8|ts|aac)`
+	pattern = `[a-z0-9=\_\-A-Z\/\.]*\.(m3u8|ts|aac)(\?[^\s"]*)?`
 	re = regexp.MustCompile(pattern)
+
+	// For catchup streams with variants, reorder them to put highest quality first
+	if bytes.Contains(renderResult, []byte("vbegin=")) && bytes.Contains(renderResult, []byte("#EXT-X-STREAM-INF")) {
+		renderResult = reorderCatchupVariants(renderResult)
+	}
+
 	// Execute replacer function on renderResult
 	renderResult = re.ReplaceAllFunc(renderResult, replacer)
 
@@ -468,7 +475,17 @@ func RenderHandler(c *fiber.Ctx) error {
 		utils.Log.Println("Error rendering M3U8 file")
 		utils.Log.Println(string(renderResult))
 	}
+
+	// Debug: save processed catchup playlist
+	// Detect by checking if it has variants (master playlist) and channel_key_id in path
+	if bytes.Contains(renderResult, []byte("#EXT-X-STREAM-INF")) && channel_id != "" {
+		if f, err := os.OpenFile("/tmp/catchup_processed.m3u8", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			f.Write(renderResult)
+			f.Close()
+		}
+	}
 	internalUtils.SetMustRevalidateHeader(c, 3)
+	c.Set("Content-Type", "application/vnd.apple.mpegurl")
 	return c.Status(statusCode).Send(renderResult)
 }
 

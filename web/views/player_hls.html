@@ -45,6 +45,7 @@
   <body>
     <div id="jiotv_go_player"></div>
     <script>
+      console.log("JioTV Go Player v2.0 - Quality Selector Enabled");
       var player = flowplayer("#jiotv_go_player", {
         src: "{{ .play_url }}",
         auto_orient: true,
@@ -60,6 +61,95 @@
           enabled: true
         },
         ui: flowplayer.ui.USE_THIN_CONTROLBAR,
+      });
+      
+      // Custom quality selector for catchup streams
+      player.on("ready", function(e, api) {
+        console.log("Flowplayer ready");
+        console.log("Has qualities:", api.video.qualities);
+        console.log("Current quality:", api.quality);
+        
+        // Check if we have multiple qualities
+        if (api.video.qualities && api.video.qualities.length > 1) {
+          console.log("Multiple qualities detected:", api.video.qualities.length);
+          
+          // Create custom quality button
+          setTimeout(function() {
+            var controls = document.querySelector(".fp-controls");
+            if (!controls || controls.querySelector(".fp-quality-selector")) return;
+            
+            var qualityBtn = document.createElement("div");
+            qualityBtn.className = "fp-quality-selector fp-icon";
+            qualityBtn.title = "Quality";
+            qualityBtn.innerHTML = '<span class="fp-quality-label">HD</span>';
+            qualityBtn.style.cssText = "position:relative; cursor:pointer; padding:0 10px; display:flex; align-items:center;";
+            
+            // Create dropdown menu
+            var qualityMenu = document.createElement("div");
+            qualityMenu.className = "fp-quality-menu";
+            qualityMenu.style.cssText = "display:none; position:absolute; bottom:100%; right:0; background:#000; border:1px solid #333; border-radius:4px; margin-bottom:5px; min-width:100px;";
+            
+            // Add quality options
+            api.video.qualities.forEach(function(q, index) {
+              var option = document.createElement("div");
+              option.className = "fp-quality-option";
+              option.textContent = q.name || q.label || (q.height + "p") || "Quality " + (index + 1);
+              option.style.cssText = "padding:8px 12px; cursor:pointer; white-space:nowrap; color:#fff;";
+              option.dataset.index = index;
+              
+              option.addEventListener("mouseenter", function() {
+                this.style.background = "#333";
+              });
+              option.addEventListener("mouseleave", function() {
+                this.style.background = "transparent";
+              });
+              option.addEventListener("click", function() {
+                var idx = parseInt(this.dataset.index);
+                api.quality = idx;
+                qualityMenu.style.display = "none";
+                updateQualityLabel();
+              });
+              
+              qualityMenu.appendChild(option);
+            });
+            
+            qualityBtn.appendChild(qualityMenu);
+            
+            // Toggle menu on click
+            qualityBtn.addEventListener("click", function(e) {
+              e.stopPropagation();
+              qualityMenu.style.display = qualityMenu.style.display === "none" ? "block" : "none";
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener("click", function() {
+              qualityMenu.style.display = "none";
+            });
+            
+            // Update label based on current quality
+            function updateQualityLabel() {
+              var currentQ = api.video.qualities[api.quality];
+              if (currentQ) {
+                var label = currentQ.name || currentQ.label || (currentQ.height + "p") || "HD";
+                qualityBtn.querySelector(".fp-quality-label").textContent = label;
+              }
+            }
+            
+            updateQualityLabel();
+            
+            // Insert before volume or at end
+            var volumeControl = controls.querySelector(".fp-volume");
+            if (volumeControl) {
+              controls.insertBefore(qualityBtn, volumeControl);
+            } else {
+              controls.appendChild(qualityBtn);
+            }
+            
+            console.log("Custom quality selector added");
+          }, 500);
+        } else {
+          console.log("No multiple qualities detected");
+        }
       });
       player.on(flowplayer.events.FULLSCREEN_ENTER, (e) => {
         // rotate to landscape on mobile devices
@@ -187,6 +277,233 @@
                     }
                 }, 100);
             });
+          }
+      })();
+      
+      // Dynamic Quality Selector for Catchup - detects available qualities from master playlist
+      (function() {
+          var detectedQualities = [];
+          var currentQualityIndex = 0;
+          var qualitiesDetected = false;
+          
+          // Get quality from URL if specified
+          var urlParams = new URLSearchParams(window.location.search);
+          var urlQuality = urlParams.get('q') || 'high'; // Default to high
+          
+          var MAX_ATTEMPTS = 100;
+          var attempts = 0;
+          
+          // Fetch and parse master playlist to detect available qualities
+          function detectAvailableQualities() {
+              var playUrl = "{{ .play_url }}";
+              
+              fetch(playUrl)
+                  .then(function(response) { return response.text(); })
+                  .then(function(m3u8Content) {
+                      console.log('JioTV Go: Parsing master playlist for quality variants...');
+                      
+                      // Parse #EXT-X-STREAM-INF lines to extract qualities
+                      var lines = m3u8Content.split('\n');
+                      var variants = [];
+                      
+                      for (var i = 0; i < lines.length; i++) {
+                          var line = lines[i].trim();
+                          if (line.startsWith('#EXT-X-STREAM-INF:')) {
+                              var resolution = '';
+                              var bandwidth = 0;
+                              
+                              // Extract RESOLUTION
+                              var resMatch = line.match(/RESOLUTION=(\d+x\d+)/);
+                              if (resMatch) resolution = resMatch[1];
+                              
+                              // Extract BANDWIDTH
+                              var bwMatch = line.match(/BANDWIDTH=(\d+)/);
+                              if (bwMatch) bandwidth = parseInt(bwMatch[1]);
+                              
+                              if (resolution) {
+                                  var height = parseInt(resolution.split('x')[1]);
+                                  var label = height + 'p';
+                                  
+                                  // Map to quality value
+                                  var value = 'high';
+                                  if (height >= 1080) value = 'high';
+                                  else if (height >= 720) value = 'high';
+                                  else if (height >= 480) value = 'med';
+                                  else value = 'low';
+                                  
+                                  variants.push({
+                                      label: label,
+                                      value: value,
+                                      height: height,
+                                      bandwidth: bandwidth,
+                                      resolution: resolution
+                                  });
+                              }
+                          }
+                      }
+                      
+                      // Sort by height (highest first)
+                      variants.sort(function(a, b) { return b.height - a.height; });
+                      
+                      // Remove duplicates and assign proper values
+                      if (variants.length > 0) {
+                          detectedQualities = [];
+                          var uniqueHeights = {};
+                          
+                          variants.forEach(function(v) {
+                              if (!uniqueHeights[v.height]) {
+                                  uniqueHeights[v.height] = true;
+                                  
+                                  // Assign value based on position
+                                  var value = 'high';
+                                  if (detectedQualities.length === 0) value = 'high';
+                                  else if (detectedQualities.length === 1) value = 'med';
+                                  else value = 'low';
+                                  
+                                  detectedQualities.push({
+                                      label: v.label,
+                                      value: value,
+                                      height: v.height
+                                  });
+                              }
+                          });
+                          
+                          console.log('JioTV Go: Detected ' + detectedQualities.length + ' quality levels:', detectedQualities);
+                          
+                          // Find current quality index
+                          for (var j = 0; j < detectedQualities.length; j++) {
+                              if (detectedQualities[j].value === urlQuality) {
+                                  currentQualityIndex = j;
+                                  break;
+                              }
+                          }
+                          
+                          qualitiesDetected = true;
+                          injectQualitySelector();
+                      } else {
+                          console.log('JioTV Go: No quality variants detected in master playlist');
+                      }
+                  })
+                  .catch(function(error) {
+                      console.log('JioTV Go: Could not parse master playlist:', error);
+                  });
+          }
+          
+          function injectQualitySelector() {
+              attempts++;
+              
+              if (!qualitiesDetected || detectedQualities.length <= 1) {
+                  return false; // Don't show selector for single quality
+              }
+              
+              var controls = document.querySelector('.fp-controls');
+              
+              if (controls && !controls.querySelector('.fp-quality-selector')) {
+                  console.log('JioTV Go: Injecting Dynamic Quality Selector');
+                  
+                  var qualityBtn = document.createElement('div');
+                  qualityBtn.className = 'fp-icon fp-quality-selector';
+                  qualityBtn.innerHTML = detectedQualities[currentQualityIndex].label;
+                  qualityBtn.title = 'Quality';
+                  qualityBtn.style.cssText = 'position:relative; cursor:pointer; min-width:50px; text-align:center;';
+                  
+                  // Create dropdown
+                  var qualityMenu = document.createElement('div');
+                  qualityMenu.className = 'fp-quality-menu';
+                  qualityMenu.style.cssText = 'display:none; position:absolute; bottom:100%; right:0; background:#000; border:1px solid #333; border-radius:4px; margin-bottom:5px; min-width:80px; z-index:9999;';
+                  
+                  detectedQualities.forEach(function(q, index) {
+                      var option = document.createElement('div');
+                      option.textContent = q.label;
+                      option.style.cssText = 'padding:8px 12px; cursor:pointer; color:#fff;';
+                      option.dataset.index = index;
+                      
+                      if (index === currentQualityIndex) {
+                          option.style.background = '#333';
+                          option.textContent += ' ✓';
+                      }
+                      
+                      option.onmouseenter = function() { this.style.background = '#555'; };
+                      option.onmouseleave = function() {
+                          this.style.background = (parseInt(this.dataset.index) === currentQualityIndex) ? '#333' : 'transparent';
+                      };
+                      option.onclick = function() {
+                          var newIndex = parseInt(this.dataset.index);
+                          if (newIndex !== currentQualityIndex) {
+                              // Reload player with new quality
+                              var currentTime = 0;
+                              if (typeof player !== 'undefined' && player.video) {
+                                  currentTime = player.currentTime || 0;
+                              }
+                              
+                              // Get current URL and add/update quality parameter
+                              var newUrl = new URL(window.location.href);
+                              newUrl.searchParams.set('q', detectedQualities[newIndex].value);
+                              
+                              // Reload with new quality, preserving current time
+                              sessionStorage.setItem('resumeTime', currentTime);
+                              window.location.href = newUrl.toString();
+                          }
+                          qualityMenu.style.display = 'none';
+                      };
+                      
+                      qualityMenu.appendChild(option);
+                  });
+                  
+                  qualityBtn.appendChild(qualityMenu);
+                  
+                  qualityBtn.onclick = function(e) {
+                      e.stopPropagation();
+                      qualityMenu.style.display = qualityMenu.style.display === 'none' ? 'block' : 'none';
+                  };
+                  
+                  document.addEventListener('click', function() {
+                      qualityMenu.style.display = 'none';
+                  });
+                  
+                  // Insert before speed control
+                  var speedControl = controls.querySelector('.fp-speed-control');
+                  if (speedControl) {
+                      speedControl.parentNode.insertBefore(qualityBtn, speedControl);
+                  } else {
+                      var fsBtn = controls.querySelector('.fp-fullscreen');
+                      if (fsBtn) {
+                          fsBtn.parentNode.insertBefore(qualityBtn, fsBtn);
+                      } else {
+                          controls.appendChild(qualityBtn);
+                      }
+                  }
+                  
+                  console.log('JioTV Go: Dynamic quality selector added - Current: ' + detectedQualities[currentQualityIndex].label);
+                  return true;
+              }
+              return false;
+          }
+          
+          // Start detection immediately
+          detectAvailableQualities();
+          
+          // Polling for controls to appear
+          var interval = setInterval(function() {
+              if (qualitiesDetected && (injectQualitySelector() || attempts > MAX_ATTEMPTS)) {
+                  clearInterval(interval);
+              }
+          }, 100);
+          
+          // Resume playback from saved time after quality change
+          if (typeof player !== 'undefined') {
+              player.on('ready', function() {
+                  var resumeTime = sessionStorage.getItem('resumeTime');
+                  if (resumeTime) {
+                      player.currentTime = parseFloat(resumeTime);
+                      sessionStorage.removeItem('resumeTime');
+                      console.log('JioTV Go: Resumed at ' + resumeTime + 's after quality change');
+                  }
+                  
+                  // Try to inject after ready as backup
+                  attempts = 0;
+                  setTimeout(injectQualitySelector, 500);
+              });
           }
       })();
       {{ end }}
