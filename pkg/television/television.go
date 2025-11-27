@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/valyala/fasthttp"
 	"gopkg.in/yaml.v3"
@@ -49,7 +51,14 @@ func logExcessiveChannelsWarning(channelCount int, context string) {
 var (
 	// customChannelsCacheMap holds cached custom channels indexed by ID for efficient lookups
 	customChannelsCacheMap map[string]Channel
+
+	// Cache for Channels API
+	channelCache []Channel
+	cacheMutex   sync.RWMutex
+	cacheExpiry  time.Time
 )
+
+const cacheTTL = 4 * time.Hour
 
 // New function creates a new Television instance with the provided credentials
 func New(credentials *utils.JIOTV_CREDENTIALS) *Television {
@@ -182,7 +191,7 @@ func (tv *Television) Live(channelID string) (*LiveURLOutput, error) {
 			utils.Log.Println("Retrying the request...")
 			return tv.Live(channelID)
 		}
-		utils.Log.Panic(err)
+		utils.Log.Println(err)
 		return nil, err
 	}
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -192,14 +201,14 @@ func (tv *Television) Live(channelID string) (*LiveURLOutput, error) {
 		// Log headers and request data
 		utils.Log.Println("Request headers:", req.Header.String())
 		utils.Log.Println("Request data:", formData.String())
-		utils.Log.Panicln("Response: ", response)
+		utils.Log.Println("Response: ", response)
 
 		return nil, fmt.Errorf("Request failed with status code: %d\nresponse: %s", resp.StatusCode(), response)
 	}
 
 	var result LiveURLOutput
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		utils.Log.Panic(err)
+		utils.Log.Println(err)
 		return nil, err
 	}
 
@@ -290,7 +299,8 @@ func (tv *Television) Render(url string) ([]byte, int, string) {
 
 	// Perform the HTTP GET request
 	if err := tv.Client.Do(req, resp); err != nil {
-		utils.Log.Panic(err)
+		utils.Log.Println(err)
+		return nil, 0, ""
 	}
 
 	buf := resp.Body()
@@ -418,6 +428,44 @@ func getCustomChannels() []Channel {
 
 // Channels fetch channels from JioTV API and merge with custom channels
 func Channels() (ChannelsResponse, error) {
+	// Check cache first
+	cacheMutex.RLock()
+	if time.Now().Before(cacheExpiry) && channelCache != nil {
+		cachedChannels := channelCache
+		cacheMutex.RUnlock()
+		// Return a copy or directly the slice?
+		// Since we append custom channels later, we should probably be careful.
+		// But ChannelsResponse.Result is a slice.
+		// If we append to it, we might modify the underlying array if capacity allows.
+		// So we should copy it.
+		result := make([]Channel, len(cachedChannels))
+		copy(result, cachedChannels)
+
+		// Append custom channels
+		if config.Cfg.CustomChannelsFile != "" {
+			customChannels := getCustomChannels()
+			result = append(result, customChannels...)
+		}
+
+		return ChannelsResponse{Result: result, Code: 200, Message: "Success"}, nil
+	}
+	cacheMutex.RUnlock()
+
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+
+	// Double check
+	if time.Now().Before(cacheExpiry) && channelCache != nil {
+		cachedChannels := channelCache
+		result := make([]Channel, len(cachedChannels))
+		copy(result, cachedChannels)
+		if config.Cfg.CustomChannelsFile != "" {
+			customChannels := getCustomChannels()
+			result = append(result, customChannels...)
+		}
+		return ChannelsResponse{Result: result, Code: 200, Message: "Success"}, nil
+	}
+
 	// Create a fasthttp.Client
 	client := utils.GetRequestClient()
 
@@ -454,6 +502,10 @@ func Channels() (ChannelsResponse, error) {
 
 	// disable sony channels temporarily
 	// apiResponse.Result = append(apiResponse.Result, SONY_CHANNELS_API...)
+
+	// Update cache
+	channelCache = apiResponse.Result
+	cacheExpiry = time.Now().Add(cacheTTL)
 
 	// Load and append custom channels if configured
 	if config.Cfg.CustomChannelsFile != "" {
@@ -652,7 +704,7 @@ func getSLChannel(channelID string) (*LiveURLOutput, error) {
 
 		chu, err := base64.StdEncoding.DecodeString(SONY_CHANNELS[val])
 		if err != nil {
-			utils.Log.Panic(err)
+			utils.Log.Println(err)
 			return nil, err
 		}
 
@@ -670,12 +722,14 @@ func getSLChannel(channelID string) (*LiveURLOutput, error) {
 
 		// Perform the HTTP GET request
 		if err := utils.GetRequestClient().Do(req, resp); err != nil {
-			utils.Log.Panic(err)
+			utils.Log.Println(err)
+			return nil, err
 		}
 
 		if resp.StatusCode() != fasthttp.StatusFound {
-			utils.Log.Panicf("Request failed with status code: %d", resp.StatusCode())
-			utils.Log.Panicln("Response: ", string(resp.Body()))
+			utils.Log.Printf("Request failed with status code: %d", resp.StatusCode())
+			utils.Log.Println("Response: ", string(resp.Body()))
+			return nil, fmt.Errorf("request failed with status code: %d", resp.StatusCode())
 		}
 
 		// Store the location header in actual_url

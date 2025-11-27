@@ -13,11 +13,20 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+const (
+	catchupEPGURL   = "https://jiotvapi.cdn.jio.com/apis/v1.3/getepg/get?offset=%d&channel_id=%s&langId=6"
+	okhttpUserAgent = "okhttp/4.12.13"
+)
+
 // CatchupHandler renders the catchup UI for a specific channel
 func CatchupHandler(c *fiber.Ctx) error {
 	id := c.Params("id")
 	offsetStr := c.Query("offset", "0")
-	offset, _ := strconv.Atoi(offsetStr)
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil {
+		offset = 0
+		pkgUtils.Log.Printf("Invalid offset query parameter, defaulting to 0: %v", err)
+	}
 
 	// Fetch EPG data
 	epgData, err := getCatchupEPG(id, offset)
@@ -182,20 +191,21 @@ func CatchupRenderPlayerHandler(c *fiber.Ctx) error {
 	playURL := fmt.Sprintf("/catchup/stream/%s?start=%s&end=%s&srno=%s", id, start, end, srno)
 
 	return c.Render("views/player_hls", fiber.Map{
-		"play_url": playURL,
+		"play_url":   playURL,
+		"is_catchup": true,
 	})
 }
 
 // Helper to fetch EPG
 func getCatchupEPG(id string, offset int) ([]map[string]interface{}, error) {
-	url := fmt.Sprintf("https://jiotvapi.cdn.jio.com/apis/v1.3/getepg/get?offset=%d&channel_id=%s&langId=6", offset, id)
+	url := fmt.Sprintf(catchupEPGURL, offset, id)
 
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 	req.SetRequestURI(url)
 	req.Header.SetMethod("GET")
 	req.Header.Set("Host", "jiotvapi.cdn.jio.com")
-	req.Header.Set("user-agent", "okhttp/4.12.13")
+	req.Header.Set("user-agent", okhttpUserAgent)
 	req.Header.Set("Accept-Encoding", "gzip")
 
 	resp := fasthttp.AcquireResponse()

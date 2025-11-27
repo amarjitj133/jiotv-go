@@ -166,7 +166,6 @@ func IndexHandler(c *fiber.Ctx) error {
 	}
 
 	// Context data for index page
-	// Context data for index page
 	indexContext := fiber.Map{
 		"Title":         Title,
 		"Channels":      nil,
@@ -379,9 +378,7 @@ func RenderHandler(c *fiber.Ctx) error {
 		decoded_url = decoded_url + sep + "hdnea=" + hdnea
 	}
 
-	fmt.Printf("Render Decoded URL: %s\n", decoded_url)
 	renderResult, statusCode, newHdnea := TV.Render(decoded_url)
-	fmt.Printf("Render Status Code: %d\n", statusCode)
 
 	// If we get a 403 (Forbidden), try refreshing tokens and retry once
 	if statusCode == fiber.StatusForbidden {
@@ -700,15 +697,76 @@ func PlayerHandler(c *fiber.Ctx) error {
 	id := c.Params("id")
 	quality := c.Query("q")
 	play_url := utils.BuildHLSPlayURL(quality, id)
+	isCatchup := false
+
 	if channel, exists := getPluginChannel(id); exists {
 		// Use absolute URL for player to ensure it works across different contexts
 		hostURL := c.BaseURL()
 		// Always serve .m3u8 URL without quality parameter - let the player's qsel handle quality selection
 		play_url = fmt.Sprintf("%s/%s.m3u8", hostURL, channel.URL)
+	} else if getChannelCatchupSupport(id) {
+		// Try to find current program for catchup-live experience
+		// Check today (0) and yesterday (-1) in case program started before midnight
+		offsets := []int{0, -1}
+		found := false
+
+		now := time.Now().UnixMilli()
+		loc := time.FixedZone("IST", 5*3600+30*60)
+
+		for _, offset := range offsets {
+			if found {
+				break
+			}
+			epg, err := getCatchupEPG(id, offset)
+			if err != nil {
+				continue
+			}
+
+			for _, prog := range epg {
+				start, ok1 := prog["startEpoch"].(int64)
+				end, ok2 := prog["endEpoch"].(int64)
+				if ok1 && ok2 {
+					// Scale to ms if needed
+					if start < 100000000000 {
+						start *= 1000
+					}
+					if end < 100000000000 {
+						end *= 1000
+					}
+
+					if now >= start && now < end {
+						// Found current program
+						srno := ""
+						if s, ok := prog["srno"].(string); ok {
+							srno = s
+						} else if s, ok := prog["srno"].(float64); ok {
+							srno = fmt.Sprintf("%.0f", s)
+						}
+
+						// Format times to YYYYMMDDTHHMMSS
+						startStr := time.UnixMilli(start).In(loc).Format("20060102T150405")
+						endStr := time.UnixMilli(end).In(loc).Format("20060102T150405")
+
+						play_url = fmt.Sprintf("/catchup/stream/%s?start=%s&end=%s&srno=%s", id, startStr, endStr, srno)
+						isCatchup = true
+						found = true
+						utils.Log.Printf("Switched to catchup stream for live channel %s: %s", id, play_url)
+						break
+					}
+				}
+			}
+		}
+		if !found {
+			utils.Log.Printf("Could not find current program in EPG for channel %s, falling back to live stream", id)
+		}
+	} else {
+		utils.Log.Printf("Channel %s does not support catchup, using live stream", id)
 	}
+
 	internalUtils.SetCacheHeader(c, 3600)
 	return c.Render("views/player_hls", fiber.Map{
-		"play_url": play_url,
+		"play_url":   play_url,
+		"is_catchup": isCatchup,
 	})
 }
 
