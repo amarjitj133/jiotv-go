@@ -62,7 +62,8 @@ http://127.0.0.1:5001/live/545.m3u8
 
 ## 🎯 **Why Multi-Audio Metadata is NOT in M3U:**
 
-### **Technical Reasons:**
+
+
 
 1. **Standard M3U8 Format**: No official multi-audio attribute exists
 2. **HLS Handles It**: Audio tracks are properly defined in HLS master playlists
