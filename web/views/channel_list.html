@@ -52,7 +52,7 @@
   <div id="original-channels-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4">
     {{range $channel := .Channels}}
     <div
-      class="card relative border border-primary shadow-lg hover:shadow-xl hover:bg-base-300 transition-all duration-200 ease-in-out scale-100 hover:scale-105 group"
+      class="card relative overflow-hidden border border-primary shadow-lg hover:shadow-xl hover:bg-base-300 transition-all duration-200 ease-in-out scale-100 hover:scale-105 group"
       data-channel-id="{{$channel.ID}}"
       tabindex="0"
     >
