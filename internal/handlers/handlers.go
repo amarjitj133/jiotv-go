@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -478,12 +477,12 @@ func RenderHandler(c *fiber.Ctx) error {
 
 	// Debug: save processed catchup playlist
 	// Detect by checking if it has variants (master playlist) and channel_key_id in path
-	if bytes.Contains(renderResult, []byte("#EXT-X-STREAM-INF")) && channel_id != "" {
-		if f, err := os.OpenFile("/tmp/catchup_processed.m3u8", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			f.Write(renderResult)
-			f.Close()
-		}
-	}
+	// if bytes.Contains(renderResult, []byte("#EXT-X-STREAM-INF")) && channel_id != "" {
+	// 	if f, err := os.OpenFile("/tmp/catchup_processed.m3u8", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+	// 		f.Write(renderResult)
+	// 		f.Close()
+	// 	}
+	// }
 	internalUtils.SetMustRevalidateHeader(c, 3)
 	c.Set("Content-Type", "application/vnd.apple.mpegurl")
 	return c.Status(statusCode).Send(renderResult)

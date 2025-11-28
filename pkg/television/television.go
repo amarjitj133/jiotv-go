@@ -749,7 +749,7 @@ func (tv *Television) GetCatchupURL(channelID, srno, start, end string) (*LiveUR
 	formData := fasthttp.AcquireArgs()
 	defer fasthttp.ReleaseArgs(formData)
 
-	formData.Add("stream_type", "Catchup")
+	formData.Add("stream_type", "Seek")
 	formData.Add("channel_id", channelID)
 	formData.Add("programId", srno)
 	formData.Add("showtime", "000000")
@@ -812,7 +812,7 @@ func (tv *Television) GetCatchupURL(channelID, srno, start, end string) (*LiveUR
 
 	var result LiveURLOutput
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		utils.Log.Panic(err)
+		utils.Log.Println(err)
 		return nil, err
 	}
 

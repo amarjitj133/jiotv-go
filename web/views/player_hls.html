@@ -49,7 +49,7 @@
       var player = flowplayer("#jiotv_go_player", {
         src: "{{ .play_url }}",
         auto_orient: true,
-        live: false,
+        live: {{ if .is_catchup }}false{{ else }}true{{ end }},
         seekable: true,
         retry: true,
         autoplay: false,

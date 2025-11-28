@@ -35,6 +35,9 @@ jiotv_credentials_v2.json
 .jiotv_go
 config_login.json
 
+config_login.json
+catchup_processed.m3u8
+
 # Token and session files
 *token*.json
 *session*.json

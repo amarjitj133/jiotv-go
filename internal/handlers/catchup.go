@@ -17,6 +17,7 @@ const (
 	catchupEPGURL   = "https://jiotvapi.cdn.jio.com/apis/v1.3/getepg/get?offset=%d&channel_id=%s&langId=%d"
 	okhttpUserAgent = "okhttp/4.12.13"
 	defaultLangID   = 6
+	epochThreshold  = 100000000000
 )
 
 // CatchupHandler renders the catchup UI for a specific channel
@@ -53,7 +54,7 @@ func CatchupHandler(c *fiber.Ctx) error {
 	for _, p := range epgData {
 		if start, ok := p["startEpoch"].(int64); ok {
 			// Normalize to milliseconds if it looks like seconds
-			if start < 100000000000 {
+			if start < epochThreshold {
 				start = start * 1000
 			}
 
@@ -66,7 +67,7 @@ func CatchupHandler(c *fiber.Ctx) error {
 			p["showtime"] = startTime.Format("03:04 PM")
 
 			if end, ok := p["endEpoch"].(int64); ok {
-				if end < 100000000000 {
+				if end < epochThreshold {
 					end = end * 1000
 				}
 
