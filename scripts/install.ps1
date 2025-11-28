@@ -1,38 +1,12 @@
 try {
-        # Check if running with admin privileges
-    # $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-
-    # # URL of the PowerShell script
-    # $scriptUrl = "https://raw.githubusercontent.com/jiotv-go/jiotv_go/main/scripts/install.ps1"
-
-    # # Download the script content
-    # $scriptContent = Invoke-WebRequest -Uri $scriptUrl -UseBasicParsing | Select-Object -ExpandProperty Content
-
-    # # Save the script content to install-jiotv_go.ps1
-    # $scriptContent | Out-File -FilePath ".\install-jiotv_go.ps1" -Force
-
-    # # If user wants to access from anywhere, add to PATH
-    # # (Note: This section assumes that you have the user's consent to modify the system environment variable)
+    # Prompt the user for permission to add the application to the system's PATH.
     $accessFromAnywhere = $null
-    # while ($accessFromAnywhere -eq $null) {
-    #     $accessFromAnywhere = Read-Host "Do you want to access jiotv_go from anywhere? (yes/no)"
-    #     if ($accessFromAnywhere -notin @("yes", "no")) {
-    #         Write-Host "Invalid choice. Please enter 'yes' or 'no'."
-    #         $accessFromAnywhere = $null
-    #     }
-    # }
-
-    # if ($accessFromAnywhere -eq "yes") {
-    #     if (-not $isAdmin) {
-    #         Write-Host "Requesting admin privileges..."
-    
-    #         # Relaunch the script with admin privileges and pass the script path as an argument
-    #         Start-Process -FilePath PowerShell.exe -Verb Runas -ArgumentList "-File `"$(".\install-jiotv_go.ps1")`"  `"$($MyInvocation.MyCommand.UnboundArguments)`""
-
-    #         Write-Host "Please use the new window opened."
-    #         exit 0
-    #     }
-    # }
+    while ($accessFromAnywhere -notin @("yes", "no")) {
+        $accessFromAnywhere = Read-Host "Do you want to be able to run 'jiotv_go' from any terminal? (This will add it to your system PATH) [yes/no]"
+        if ($accessFromAnywhere -notin @("yes", "no")) {
+            Write-Host "Invalid choice. Please enter 'yes' or 'no'."
+        }
+    }
 
     # Identify operating system architecture
     $architecture = (Get-WmiObject Win32_OperatingSystem).OSArchitecture
@@ -79,6 +53,14 @@ try {
     Invoke-WebRequest -Uri $binaryUrl -OutFile jiotv_go.exe -UseBasicParsing
 
     if ($accessFromAnywhere -eq "yes") {
+        # Check for admin privileges before modifying the system PATH
+        $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        if (-not $isAdmin) {
+            Write-Host "Adding to system PATH requires administrator privileges." -ForegroundColor Yellow
+            Write-Host "Please re-run the script from a terminal with 'Run as Administrator'." -ForegroundColor Yellow
+            throw "Administrator privileges required."
+        }
+
         # Add the directory to PATH in the current session
         $env:Path = "$env:Path;$homeDirectory"
         

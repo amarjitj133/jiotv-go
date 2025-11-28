@@ -99,49 +99,63 @@ func TestGrep(t *testing.T) {
 
 // Test_bashrcModifiers tests both addToBashrc and removeFromBashrc.
 func TestBashrcModifiers(t *testing.T) {
-	tmpfile, err := os.CreateTemp("", "testbashrc")
-	if err != nil {
-		t.Fatal(err)
-	}
-	filename := tmpfile.Name()
-	defer os.Remove(filename)
-	tmpfile.Close()
+	t.Run("addToBashrc", func(t *testing.T) {
+		tmpfile, err := os.CreateTemp("", "testbashrc_add")
+		if err != nil {
+			t.Fatal(err)
+		}
+		filename := tmpfile.Name()
+		defer os.Remove(filename)
+		tmpfile.Close()
 
-	// Test addToBashrc
-	lineToAdd := "export TEST_VAR=1"
-	if err := addToBashrc(filename, lineToAdd); err != nil {
-		t.Fatalf("addToBashrc() failed: %v", err)
-	}
+		lineToAdd := "export TEST_VAR=1"
+		if err := addToBashrc(filename, lineToAdd); err != nil {
+			t.Fatalf("addToBashrc() failed: %v", err)
+		}
 
-	content, err := os.ReadFile(filename)
-	if err != nil {
-		t.Fatalf("Failed to read file: %v", err)
-	}
-	if !strings.Contains(string(content), lineToAdd) {
-		t.Errorf("addToBashrc() did not add the line to the file")
-	}
+		content, err := os.ReadFile(filename)
+		if err != nil {
+			t.Fatalf("Failed to read file: %v", err)
+		}
+		// The function adds a newline, so we check for the line surrounded by newlines.
+		if !strings.Contains(string(content), "\n"+lineToAdd+"\n") {
+			t.Errorf("addToBashrc() did not add the line correctly. Got %q, expected to contain %q", string(content), "\n"+lineToAdd+"\n")
+		}
+	})
 
-	// Add another line to test removal of a specific line
-	anotherLine := "export ANOTHER_VAR=2"
-	if err := addToBashrc(filename, anotherLine); err != nil {
-		t.Fatalf("addToBashrc() failed to add second line: %v", err)
-	}
+	t.Run("removeFromBashrc", func(t *testing.T) {
+		lineToKeep := "export ANOTHER_VAR=2"
+		lineToRemove := "export TEST_VAR=1"
+		initialContent := lineToKeep + "\n" + lineToRemove + "\n"
 
-	// Test removeFromBashrc
-	if err := removeFromBashrc(filename, lineToAdd); err != nil {
-		t.Fatalf("removeFromBashrc() failed: %v", err)
-	}
+		tmpfile, err := os.CreateTemp("", "testbashrc_remove")
+		if err != nil {
+			t.Fatal(err)
+		}
+		filename := tmpfile.Name()
+		defer os.Remove(filename)
 
-	content, err = os.ReadFile(filename)
-	if err != nil {
-		t.Fatalf("Failed to read file after removal: %v", err)
-	}
-	if strings.Contains(string(content), lineToAdd) {
-		t.Errorf("removeFromBashrc() did not remove the line from the file")
-	}
-	if !strings.Contains(string(content), anotherLine) {
-		t.Errorf("removeFromBashrc() removed the wrong line")
-	}
+		if err := os.WriteFile(filename, []byte(initialContent), 0644); err != nil {
+			t.Fatalf("Failed to write initial content to test file: %v", err)
+		}
+		tmpfile.Close()
+
+		if err := removeFromBashrc(filename, lineToRemove); err != nil {
+			t.Fatalf("removeFromBashrc() failed: %v", err)
+		}
+
+		content, err := os.ReadFile(filename)
+		if err != nil {
+			t.Fatalf("Failed to read file after removal: %v", err)
+		}
+
+		if strings.Contains(string(content), lineToRemove) {
+			t.Errorf("removeFromBashrc() did not remove the line from the file. Content: %q", string(content))
+		}
+		if !strings.Contains(string(content), lineToKeep) {
+			t.Errorf("removeFromBashrc() removed the wrong line. Content: %q", string(content))
+		}
+	})
 }
 
 // TestAutoStart and Test_getConsentFromUser are intentionally left empty

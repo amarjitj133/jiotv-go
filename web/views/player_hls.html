@@ -45,7 +45,7 @@
   <body>
     <div id="jiotv_go_player"></div>
     <script>
-      console.log("JioTV Go Player v2.0 - Quality Selector Enabled");
+      // console.log("JioTV Go Player v2.0 - Quality Selector Enabled");
       var player = flowplayer("#jiotv_go_player", {
         src: "{{ .play_url }}",
         auto_orient: true,
@@ -61,17 +61,22 @@
           enabled: true
         },
         ui: flowplayer.ui.USE_THIN_CONTROLBAR,
+        hlsjs: {
+            maxBufferLength: 3600, // 1 hour in seconds
+            maxMaxBufferLength: 3600, // 1 hour in seconds
+            backBufferLength: 3600 // Keep 1 hour of back buffer
+        }
       });
       
       // Custom quality selector for catchup streams
       player.on("ready", function(e, api) {
-        console.log("Flowplayer ready");
-        console.log("Has qualities:", api.video.qualities);
-        console.log("Current quality:", api.quality);
+        // console.log("Flowplayer ready");
+        // console.log("Has qualities:", api.video.qualities);
+        // console.log("Current quality:", api.quality);
         
         // Check if we have multiple qualities
         if (api.video.qualities && api.video.qualities.length > 1) {
-          console.log("Multiple qualities detected:", api.video.qualities.length);
+          // console.log("Multiple qualities detected:", api.video.qualities.length);
           
           // Create custom quality button
           setTimeout(function() {

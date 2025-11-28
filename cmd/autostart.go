@@ -132,13 +132,17 @@ func grep(filename, pattern string) (bool, error) {
 // It opens the file in append mode, writes the line, and closes the file.
 // Returns any error encountered.
 func addToBashrc(filename, line string) error {
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+	// Use O_CREATE to ensure the file is created if it doesn't exist.
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 
-	_, err = fmt.Fprintln(file, line)
+	// Add a newline before the line to ensure it's on a new line.
+	_, err = fmt.Fprintln(file, "\n"+line)
 	if err != nil {
+		// The file is closed by the defer statement.
 		return err
 	}
 
@@ -154,36 +158,44 @@ func removeFromBashrc(filename, line string) error {
 	if err != nil {
 		return err
 	}
-	// skipcq: GO-S2307 - file.Close() should be called before return
-	defer file.Close()
 
 	tempFilename := filename + ".tmp"
 	tempFile, err := os.Create(tempFilename)
 	if err != nil {
+		file.Close() // Close the original file before returning.
 		return err
 	}
-	// skipcq: GO-S2307 - tempFile.Close() should be called before return
-	defer tempFile.Close()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		currentLine := scanner.Text()
 		if !strings.Contains(currentLine, line) {
-			_, err := fmt.Fprintln(tempFile, currentLine)
-			if err != nil {
+			if _, err := fmt.Fprintln(tempFile, currentLine); err != nil {
+				// Clean up on error
+				file.Close()
+				tempFile.Close()
+				os.Remove(tempFilename)
 				return err
 			}
 		}
 	}
 
+	// Explicitly close files before renaming.
+	if err := file.Close(); err != nil {
+		tempFile.Close()
+		os.Remove(tempFilename)
+		return err
+	}
+	if err := tempFile.Close(); err != nil {
+		os.Remove(tempFilename)
+		return err
+	}
+
 	if err := scanner.Err(); err != nil {
+		os.Remove(tempFilename)
 		return err
 	}
 
-	err = os.Rename(tempFilename, filename)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	// Rename the temporary file to the original filename.
+	return os.Rename(tempFilename, filename)
 }

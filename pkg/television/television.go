@@ -80,16 +80,17 @@ func New(credentials *utils.JIOTV_CREDENTIALS) *Television {
 		"userId":          credentials.CRM,
 		"deviceId":        utils.GetDeviceID(),
 		"devicetype":      "phone",
-		"isott":           "false",
+		"isott":           "true",
 		"languageId":      "6",
 		"lbcookie":        "1",
 		"os":              "android",
-		"osVersion":       "13",
+		"osVersion":       "14",
+		"dm":              "Xiaomi 22101316UP",
 		"subscriberId":    credentials.CRM,
 		"uniqueId":        credentials.UniqueID,
 		headers.UserAgent: headers.UserAgentOkHttp,
 		"usergroup":       "tvYR7NSNn7rymo3F",
-		"versionCode":     headers.VersionCode389,
+		"versionCode":     "452",
 	}
 
 	// Create a fasthttp.Client
@@ -185,14 +186,18 @@ func (tv *Television) Live(channelID string) (*LiveURLOutput, error) {
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	// Perform the HTTP POST request
-	if err := tv.Client.Do(req, resp); err != nil {
-		if strings.Contains(err.Error(), "server closed connection before returning the first response byte") {
-			utils.Log.Println("Retrying the request...")
-			return tv.Live(channelID)
+	// Perform the HTTP POST request with retries
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		if err := tv.Client.Do(req, resp); err != nil {
+			if strings.Contains(err.Error(), "server closed connection before returning the first response byte") {
+				utils.Log.Printf("Retrying the request (attempt %d/%d)...", i+1, maxRetries)
+				continue
+			}
+			utils.Log.Println(err)
+			return nil, err
 		}
-		utils.Log.Println(err)
-		return nil, err
+		break
 	}
 	if resp.StatusCode() != fasthttp.StatusOK {
 		// Store the response body as a string
@@ -299,11 +304,15 @@ func (tv *Television) Render(url string) ([]byte, int, string) {
 
 	// Perform the HTTP GET request
 	if err := tv.Client.Do(req, resp); err != nil {
-		utils.Log.Println(err)
+		fmt.Println("Render Error:", err)
 		return nil, 0, ""
 	}
 
-	buf := resp.Body()
+	// Copy the body because resp is released upon return
+	body := resp.Body()
+	fmt.Printf("Render: fetched %d bytes from %s\n", len(body), url)
+	buf := make([]byte, len(body))
+	copy(buf, body)
 	// Capture any __hdnea__ Set-Cookie returned by upstream so caller can set cookie on client
 	var newHdnea string
 	// Iterate Set-Cookie headers (avoid deprecated VisitAll)
@@ -424,6 +433,13 @@ func getCustomChannels() []Channel {
 		customChannels = append(customChannels, channel)
 	}
 	return customChannels
+}
+
+// GetCacheExpiry returns the cache expiry time.
+func GetCacheExpiry() time.Time {
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
+	return cacheExpiry
 }
 
 // Channels fetch channels from JioTV API and merge with custom channels
@@ -749,7 +765,7 @@ func (tv *Television) GetCatchupURL(channelID, srno, start, end string) (*LiveUR
 	formData := fasthttp.AcquireArgs()
 	defer fasthttp.ReleaseArgs(formData)
 
-	formData.Add("stream_type", "Seek")
+	formData.Add("stream_type", "Catchup")
 	formData.Add("channel_id", channelID)
 	formData.Add("programId", srno)
 	formData.Add("showtime", "000000")
@@ -780,14 +796,18 @@ func (tv *Television) GetCatchupURL(channelID, srno, start, end string) (*LiveUR
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	// Perform the HTTP POST request
-	if err := tv.Client.Do(req, resp); err != nil {
-		if strings.Contains(err.Error(), "server closed connection before returning the first response byte") {
-			utils.Log.Println("Retrying the catchup request...")
-			return tv.GetCatchupURL(channelID, srno, start, end)
+	// Perform the HTTP POST request with retries
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		if err := tv.Client.Do(req, resp); err != nil {
+			if strings.Contains(err.Error(), "server closed connection before returning the first response byte") {
+				utils.Log.Printf("Retrying the catchup request (attempt %d/%d)...", i+1, maxRetries)
+				continue
+			}
+			utils.Log.Println(err)
+			return nil, err
 		}
-		utils.Log.Println(err)
-		return nil, err
+		break
 	}
 	if resp.StatusCode() != fasthttp.StatusOK {
 		response := string(resp.Body())

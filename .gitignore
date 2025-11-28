@@ -16,6 +16,12 @@ jiotv_go
 # Test binary, built with `go test -c`
 *.test
 
+# Debug and test binaries
+*_test
+*_bin
+debug_*.go
+segment.ts
+
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 

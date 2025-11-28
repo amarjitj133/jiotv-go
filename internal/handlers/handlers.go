@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -357,6 +358,7 @@ func LiveQualityHandler(c *fiber.Ctx) error {
 func RenderHandler(c *fiber.Ctx) error {
 	// URL to be rendered
 	auth := c.Query("auth")
+	fmt.Println("RenderHandler called with auth:", auth)
 	if err := internalUtils.ValidateRequiredParam("auth", auth); err != nil {
 		return err
 	}
@@ -371,6 +373,7 @@ func RenderHandler(c *fiber.Ctx) error {
 		utils.Log.Println(err)
 		return err
 	}
+	fmt.Println("RenderHandler decoded URL:", decoded_url)
 
 	// If hdnea is present in query and missing in the decrypted URL, append it so TV.Render can forward as request cookie upstream
 	if hdnea := c.Query("hdnea"); hdnea != "" && !strings.Contains(decoded_url, HDNEA_PARAM) {
@@ -382,6 +385,12 @@ func RenderHandler(c *fiber.Ctx) error {
 	}
 
 	renderResult, statusCode, newHdnea := TV.Render(decoded_url)
+	utils.Log.Printf("Render: fetched %d bytes from %s, status: %d", len(renderResult), decoded_url, statusCode)
+	if len(renderResult) == 0 {
+		utils.Log.Println("Render: WARNING: Received empty body from TV.Render")
+	} else if len(renderResult) < 200 {
+		utils.Log.Printf("Render: Short body received: %s", string(renderResult))
+	}
 
 	// If we get a 403 (Forbidden), try refreshing tokens and retry once
 	if statusCode == fiber.StatusForbidden {
@@ -405,7 +414,10 @@ func RenderHandler(c *fiber.Ctx) error {
 	re := regexp.MustCompile(pattern)
 	// Add baseUrl to all the file names ending with .m3u8
 	baseUrl := []byte(re.ReplaceAllString(baseStringUrl, ""))
-	params := split_url_by_params[1]
+	var params string
+	if len(split_url_by_params) > 1 {
+		params = split_url_by_params[1]
+	}
 	// If upstream rotated __hdnea__, update params so rewritten URLs carry the fresh token value
 	if newHdnea != "" {
 		if strings.Contains(params, HDNEA_PARAM) {
@@ -477,12 +489,17 @@ func RenderHandler(c *fiber.Ctx) error {
 
 	// Debug: save processed catchup playlist
 	// Detect by checking if it has variants (master playlist) and channel_key_id in path
-	// if bytes.Contains(renderResult, []byte("#EXT-X-STREAM-INF")) && channel_id != "" {
-	// 	if f, err := os.OpenFile("/tmp/catchup_processed.m3u8", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-	// 		f.Write(renderResult)
-	// 		f.Close()
-	// 	}
-	// }
+	// Debug: save processed catchup playlist
+	// Detect by checking if it has variants (master playlist) and channel_key_id in path
+	if bytes.Contains(renderResult, []byte("#EXT-X-STREAM-INF")) && channel_id != "" {
+		if f, err := os.OpenFile("/tmp/catchup_processed.m3u8", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			f.Write(renderResult)
+			f.Close()
+			utils.Log.Println("Debug: Wrote processed catchup playlist to /tmp/catchup_processed.m3u8")
+		} else {
+			utils.Log.Printf("Debug: Failed to write catchup playlist: %v", err)
+		}
+	}
 	internalUtils.SetMustRevalidateHeader(c, 3)
 	c.Set("Content-Type", "application/vnd.apple.mpegurl")
 	return c.Status(statusCode).Send(renderResult)
@@ -521,20 +538,27 @@ func RenderKeyHandler(c *fiber.Ctx) error {
 	}
 
 	// extract params from url
-	params := strings.Split(decoded_url, "?")[1]
+	var params string
+	if strings.Contains(decoded_url, "?") {
+		params = strings.Split(decoded_url, "?")[1]
+	}
 
 	// set params as cookies as JioTV uses cookies to authenticate
-	for _, param := range strings.Split(params, "&") {
-		key := strings.Split(param, "=")[0]
-		value := strings.Split(param, "=")[1]
-		c.Request().Header.SetCookie(key, value)
-	}
-	// ensure __hdnea__ cookie exists if available from params
-	if strings.Contains(params, HDNEA_PARAM) {
-		for _, p := range strings.Split(params, "&") {
-			if strings.HasPrefix(p, HDNEA_PARAM) {
-				c.Request().Header.SetCookie("__hdnea__", strings.TrimPrefix(p, HDNEA_PARAM))
-				break
+	if params != "" {
+		for _, param := range strings.Split(params, "&") {
+			if strings.Contains(param, "=") {
+				key := strings.Split(param, "=")[0]
+				value := strings.Split(param, "=")[1]
+				c.Request().Header.SetCookie(key, value)
+			}
+		}
+		// ensure __hdnea__ cookie exists if available from params
+		if strings.Contains(params, HDNEA_PARAM) {
+			for _, p := range strings.Split(params, "&") {
+				if strings.HasPrefix(p, HDNEA_PARAM) {
+					c.Request().Header.SetCookie("__hdnea__", strings.TrimPrefix(p, HDNEA_PARAM))
+					break
+				}
 			}
 		}
 	}

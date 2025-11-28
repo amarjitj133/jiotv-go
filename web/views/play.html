@@ -20,8 +20,38 @@
             class="relative overflow-hidden w-full rounded-xl bg-black"
             style="aspect-ratio: 16/9; min-height: 200px"
           >
+            {{if .ErrorMessage}}
+            <!-- Error message for unavailable catchup content -->
+            <div class="flex items-center justify-center h-full bg-base-200">
+              <div class="text-center p-8 max-w-md">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-16 h-16 mx-auto mb-4 text-warning">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                <h2 class="text-xl font-bold mb-3">Catchup Not Available</h2>
+                <p class="mb-4">{{ .ErrorMessage }}</p>
+                <div class="flex gap-2 justify-center">
+                  {{if .IsCatchupAvailable}}
+                  <a href="/catchup/{{ .ChannelID }}" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                    </svg>
+                    Back to Catchup
+                  </a>
+                  {{end}}
+                  <a href="/play/{{ .ChannelID }}" class="btn btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                    </svg>
+                    Watch Live
+                  </a>
+                </div>
+              </div>
+            </div>
+            {{else}}
+            <!-- Normal player iframe -->
             <iframe
               id="playerIframe"
+              title="Video Player"
               class="absolute top-0 left-0 bottom-0 right-0 w-full h-full"
               src="{{ .player_url }}"
               width="100%"
@@ -31,6 +61,7 @@
               allowfullscreen
               allow="autoplay"
             ></iframe>
+            {{end}}
           </div>
           <div class="mt-2 flex justify-center gap-2">
             {{if .IsCatchupAvailable}}

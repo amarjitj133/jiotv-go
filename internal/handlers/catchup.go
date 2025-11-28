@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -133,6 +134,23 @@ func CatchupStreamHandler(c *fiber.Ctx) error {
 	}
 
 	// Fetch signed catchup URL and token
+	// Convert epoch to YYYYMMDDTHHMMSS format if needed
+	// JioTV API expects format: 20060102T150405
+	//
+	// IMPORTANT: JioTV API expects times in UTC, NOT IST
+	// - Using IST causes 5.5hr offset leading to wrong episodes or 400 errors
+	// - This was verified by comparing with TS-JioTV reference implementation
+	// - Do not change to IST/local time without extensive testing
+	if _, err := strconv.ParseInt(start, 10, 64); err == nil {
+		startInt, _ := strconv.ParseInt(start, 10, 64)
+		endInt, _ := strconv.ParseInt(end, 10, 64)
+
+		// Convert millisecond timestamps to UTC time strings
+		start = time.UnixMilli(startInt).UTC().Format("20060102T150405")
+		end = time.UnixMilli(endInt).UTC().Format("20060102T150405")
+	}
+
+	pkgUtils.Log.Printf("Fetching catchup URL for channel %s, start: %s, end: %s, srno: %s", id, start, end, srno)
 	catchupResult, err := TV.GetCatchupURL(id, srno, start, end)
 	if err != nil {
 		pkgUtils.Log.Printf("Error fetching catchup URL: %v", err)
@@ -143,6 +161,8 @@ func CatchupStreamHandler(c *fiber.Ctx) error {
 	if targetURL == "" {
 		targetURL = catchupResult.Result
 	}
+	pkgUtils.Log.Printf("Catchup Target URL: %s", targetURL)
+
 	if targetURL == "" {
 		return internalUtils.InternalServerError(c, fmt.Errorf("failed to get catchup URL from API"))
 	}
@@ -226,7 +246,7 @@ func getCatchupEPG(id string, offset int) ([]map[string]interface{}, error) {
 	var err error
 
 	contentEncoding := resp.Header.Peek("Content-Encoding")
-	if string(contentEncoding) == "gzip" {
+	if bytes.Contains(contentEncoding, []byte("gzip")) {
 		body, err = resp.BodyGunzip()
 		if err != nil {
 			return nil, err
@@ -251,6 +271,10 @@ func getCatchupEPG(id string, offset int) ([]map[string]interface{}, error) {
 				}
 				if end, ok := m["endEpoch"].(float64); ok {
 					m["endEpoch"] = int64(end)
+				}
+				// Ensure srno is string to avoid scientific notation
+				if srno, ok := m["srno"].(float64); ok {
+					m["srno"] = fmt.Sprintf("%.0f", srno)
 				}
 				epgList[i] = m
 			}

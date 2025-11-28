@@ -91,7 +91,7 @@ func reorderCatchupVariants(playlist []byte) []byte {
 
 				// Inject NAME attribute if not already present
 				if !strings.Contains(line, "NAME=") && name != "" {
-					v.lines[j] = strings.TrimRight(line, "\n") + ",NAME=\"" + name + "\"\n"
+					v.lines[j] = strings.TrimRight(line, "\n") + ",NAME=\"" + name + "\""
 				}
 			}
 		}

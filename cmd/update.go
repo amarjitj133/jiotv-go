@@ -12,6 +12,11 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+const (
+	githubOwner = "JioTV-Go"
+	githubRepo  = "jiotv_go"
+)
+
 // Update checks for a newer version of the application
 // by calling getLatestRelease() to fetch the latest release
 // information from GitHub.
@@ -94,14 +99,11 @@ func Update(currentVersion, customVersion string) error {
 // getLatestRelease fetches the latest release information from the GitHub API for the given owner and repo.
 // It returns a Release struct containing the release details like tag name, assets etc.
 func getLatestRelease(customVersion string) (*Release, error) {
-	owner := "JioTV-Go"
-	repo := "jiotv_go"
-
 	var url string
 	if customVersion != "" {
-		url = fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", owner, repo, customVersion)
+		url = fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", githubOwner, githubRepo, customVersion)
 	} else {
-		url = fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
+		url = fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", githubOwner, githubRepo)
 	}
 
 	req := fasthttp.AcquireRequest()
@@ -221,31 +223,36 @@ func replaceBinary(newBinaryPath string) error {
 // determines the return value. Returns -1 if currentVersion < latestVersion,
 // 0 if currentVersion == latestVersion, and 1 if currentVersion > latestVersion.
 func compareVersions(currentVersion, latestVersion string) int {
-	// Implement version comparison logic based on your versioning scheme
-	// This is a simplified example assuming semantic versioning (major.minor.patch)
+	// Remove 'v' prefix if present
+	currentVersion = strings.TrimPrefix(currentVersion, "v")
+	latestVersion = strings.TrimPrefix(latestVersion, "v")
 
-	// Split versions into components
-	currentComponents := strings.Split(currentVersion, ".")
-	latestComponents := strings.Split(latestVersion, ".")
+	currentParts := strings.Split(currentVersion, ".")
+	latestParts := strings.Split(latestVersion, ".")
 
-	// Compare major version
-	currentMajor := atoiOrZero(currentComponents[0])
-	latestMajor := atoiOrZero(latestComponents[0])
-	if currentMajor != latestMajor {
-		return currentMajor - latestMajor
+	numParts := len(currentParts)
+	if len(latestParts) > numParts {
+		numParts = len(latestParts)
 	}
 
-	// Compare minor version
-	currentMinor := atoiOrZero(currentComponents[1])
-	latestMinor := atoiOrZero(latestComponents[1])
-	if currentMinor != latestMinor {
-		return currentMinor - latestMinor
+	for i := 0; i < numParts; i++ {
+		var currentVal, latestVal int
+		if i < len(currentParts) {
+			currentVal = atoiOrZero(currentParts[i])
+		}
+		if i < len(latestParts) {
+			latestVal = atoiOrZero(latestParts[i])
+		}
+
+		if currentVal < latestVal {
+			return -1
+		}
+		if currentVal > latestVal {
+			return 1
+		}
 	}
 
-	// Compare patch version
-	currentPatch := atoiOrZero(currentComponents[2])
-	latestPatch := atoiOrZero(latestComponents[2])
-	return currentPatch - latestPatch
+	return 0
 }
 
 // atoiOrZero converts a string to an integer, returning 0 if the
@@ -267,7 +274,7 @@ func IsUpdateAvailable(currentVersion, customVersion string) string {
 	latestVersion := release.TagName
 
 	// Compare versions
-	if customVersion == "" && compareVersions(currentVersion, latestVersion) >= 0 {
+	if customVersion == "" && compareVersions(currentVersion, latestVersion) != -1 {
 		return ""
 	}
 
@@ -277,7 +284,9 @@ func IsUpdateAvailable(currentVersion, customVersion string) string {
 // PrintIfUpdateAvailable checks if a newer version of the application is available
 func PrintIfUpdateAvailable(c *cli.Context) {
 	isUpdateAvailableVersion := IsUpdateAvailable(c.App.Version, "")
-	if isUpdateAvailableVersion != "" {
+	// Only show update notification for official builds
+	builtBy, _ := c.App.Metadata["builtBy"].(string)
+	if isUpdateAvailableVersion != "" && strings.Contains(builtBy, "goreleaser") {
 		fmt.Printf("Newer version %s available. Run `jiotv_go update` to update.\n", isUpdateAvailableVersion)
 	}
 }
