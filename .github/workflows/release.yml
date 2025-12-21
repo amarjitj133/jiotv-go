@@ -12,6 +12,8 @@ on:
       - "scripts/**"
       - "**.sh"
       - "**.md"
+      - "VERSION"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.ref }}-release
