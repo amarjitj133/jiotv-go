@@ -130,6 +130,4 @@ JioTV Go now supports 7-day catchup browsing and playback via web.
 - Play a specific episode:
   The Catchup page links to the player automatically with the correct start/end times.
 
-Zee5 channels are also available in the IPTV experience. They are included in the `/channels` list and the generated M3U when enabled, and stream through the built-in Zee5 proxy routes for cross-platform compatibility.
-
 Enjoy the seamless integration of JioTV Go into your IPTV setup. For any queries or assistance, refer to our user-friendly documentation or connect with our community on [Telegram](/#community). Happy streaming!

@@ -90,10 +90,4 @@ M3U8 stream file for the specified `channel_id`.
 
 M3U8 stream file for the specified `channel_id` with the specified `quality`. The `quality` can be `low`, `medium`, `high`, or `l`, `m`, `h`.
 
-### Zee5 Live URL
-
-- **Path**: `/zee5/:id`
-
-Streams Zee5 channels via built-in proxy routes for cross-platform playback.
-
 Explore these paths and endpoints to access the features and content offered by JioTV Go. They provide the foundation for interacting with the application and enjoying the available channels and streams.

@@ -13,7 +13,6 @@ import (
 	"github.com/jiotv-go/jiotv_go/v3/internal/constants/urls"
 	"github.com/jiotv-go/jiotv_go/v3/internal/plugins"
 	internalUtils "github.com/jiotv-go/jiotv_go/v3/internal/utils"
-	"github.com/jiotv-go/jiotv_go/v3/pkg/plugins/zee5"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/secureurl"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/television"
 	"github.com/jiotv-go/jiotv_go/v3/pkg/utils"
@@ -77,11 +76,6 @@ func Init() {
 
 	// Initialize custom channels at startup if configured
 	television.InitCustomChannels()
-
-	// Initialize Zee5 data at startup if configured
-	if config.PluginEnabled("zee5") {
-		zee5.InitZee5Data()
-	}
 }
 
 // ErrorMessageHandler handles error messages
@@ -107,37 +101,21 @@ func isCustomChannel(channelID string) bool {
 	return false
 }
 
-func isZee5Channel(channelID string) bool {
-	if !config.PluginEnabled("zee5") {
-		return false
-	}
-	for _, channel := range zee5.GetChannels() {
-		if channel.ID == channelID {
-			return true
-		}
-	}
-	return false
-}
-
 func reorderChannelsForDisplay(channels []television.Channel) []television.Channel {
 	if len(channels) == 0 {
 		return channels
 	}
 	jioChannels := make([]television.Channel, 0, len(channels))
-	zee5Channels := make([]television.Channel, 0)
 	customChannels := make([]television.Channel, 0)
 	for _, channel := range channels {
 		if isCustomChannel(channel.ID) {
 			customChannels = append(customChannels, channel)
-		} else if isZee5Channel(channel.ID) {
-			zee5Channels = append(zee5Channels, channel)
 		} else {
 			jioChannels = append(jioChannels, channel)
 		}
 	}
-	ordered := make([]television.Channel, 0, len(jioChannels)+len(zee5Channels)+len(customChannels))
+	ordered := make([]television.Channel, 0, len(jioChannels)+len(customChannels))
 	ordered = append(ordered, jioChannels...)
-	ordered = append(ordered, zee5Channels...)
 	ordered = append(ordered, customChannels...)
 	return ordered
 }
@@ -738,11 +716,7 @@ func ChannelsHandler(c *fiber.Ctx) error {
 
 	apiResponse.Result = reorderChannelsForDisplay(apiResponse.Result)
 	for i, channel := range apiResponse.Result {
-		if isZee5Channel(channel.ID) {
-			apiResponse.Result[i].URL = fmt.Sprintf("%s/%s", hostURL, channel.URL)
-		} else {
-			apiResponse.Result[i].URL = fmt.Sprintf("%s/play/%s", hostURL, channel.ID)
-		}
+		apiResponse.Result[i].URL = fmt.Sprintf("%s/play/%s", hostURL, channel.ID)
 	}
 
 	return c.JSON(apiResponse)
@@ -759,16 +733,6 @@ func PlayHandler(c *fiber.Ctx) error {
 
 	if isCustomChannel(id) {
 		player_url := "/player/" + id + "?q=" + quality
-		internalUtils.SetCacheHeader(c, 3600)
-		return c.Render("views/play", fiber.Map{
-			"Title":      Title,
-			"player_url": player_url,
-			"ChannelID":  id,
-		})
-	}
-
-	if isZee5Channel(id) {
-		player_url := "/zee5/" + id + "?q=" + quality
 		internalUtils.SetCacheHeader(c, 3600)
 		return c.Render("views/play", fiber.Map{
 			"Title":      Title,
