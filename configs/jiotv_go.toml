@@ -1,7 +1,7 @@
 # JioTV Go Configuration
 
 # Enable EPG (Electronic Program Guide)
-epg = true
+epg = false
 
 # Enable Debug Mode
 debug = true
@@ -31,14 +31,7 @@ log_to_stdout = true
 # log_path = ""
 
 # Custom Channels File
-custom_channels_file = "custom_channels.json"
-
-# Custom Channels URL
-custom_channels_url = "https://raw.githubusercontent.com/atanuroy22/iptv/refs/heads/main/output/custom-channels.json"
-
-# Epg url
-epg_url = "https://avkb.short.gy/jioepg.xml.gz"
-# epg_url = ""
+custom_channels_file = ""
 
 # Provide plugin names to activate them
 plugins = []

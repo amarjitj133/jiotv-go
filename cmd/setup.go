@@ -130,11 +130,7 @@ func RefreshCustomChannelsFromM3U() error {
 		return err
 	}
 
-	urlStr := strings.TrimSpace(config.Cfg.CustomChannelsURL)
-	if urlStr == "" {
-		urlStr = CustomChJSONURL
-	}
-	if err := downloadFile(urlStr, customChPath); err != nil {
+	if err := downloadFile(CustomChJSONURL, customChPath); err != nil {
 		if pathExists(customChPath) {
 			utils.Log.Printf("WARN: Custom channels download failed (keeping existing file): %v", err)
 			return nil
