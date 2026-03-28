@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -168,6 +168,12 @@
             drm: {
               servers: {
                 "com.widevine.alpha": licenseUrl,
+              },
+              advanced: {
+                "com.widevine.alpha": {
+                  videoRobustness: "SW_SECURE_CRYPTO",
+                  audioRobustness: "SW_SECURE_CRYPTO",
+                },
               },
             },
           });

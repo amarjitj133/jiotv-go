@@ -131,7 +131,7 @@
               >
               {{else}}
               <a
-                href="/catchup/play/{{$.Channel}}?start={{.startEpoch}}&end={{.endEpoch}}&srno={{.srno}}&showname={{.showname}}&description={{.description}}&poster={{.episodePoster}}&showtime={{.showtime}}"
+                href="/catchup/play/{{$.Channel}}?start={{.startEpoch}}&end={{.endEpoch}}&srno={{.srno}}&showname={{.showname | urlquery}}&description={{.description | urlquery}}&poster={{.episodePoster | urlquery}}&showtime={{.showtime | urlquery}}"
                 class="btn btn-primary btn-sm w-full"
                 >Watch Now</a
               >

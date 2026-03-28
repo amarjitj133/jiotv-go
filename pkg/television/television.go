@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	neturl "net/url"
 	"strings"
 
 	"github.com/valyala/fasthttp"
@@ -757,20 +758,15 @@ func (tv *Television) GetCatchupURL(channelID, srno, start, end string) (*LiveUR
 		if u == "" {
 			return ""
 		}
-		qIdx := strings.Index(u, "?")
-		if qIdx == -1 {
+		parsedURL, err := neturl.Parse(u)
+		if err != nil {
 			return ""
 		}
-		query := u[qIdx+1:]
-		for _, p := range strings.Split(query, "&") {
-			if strings.HasPrefix(p, "hdnea=") {
-				return strings.TrimPrefix(p, "hdnea=")
-			}
-			if strings.HasPrefix(p, "__hdnea__=") {
-				return strings.TrimPrefix(p, "__hdnea__=")
-			}
+		hdnea := parsedURL.Query().Get("hdnea")
+		if hdnea != "" {
+			return hdnea
 		}
-		return ""
+		return parsedURL.Query().Get("__hdnea__")
 	}
 	hdnea := extractHdneaFromURL(result.Result)
 	if hdnea == "" {

@@ -109,9 +109,9 @@ func CatchupStreamHandler(c *fiber.Ctx) error {
 		pkgUtils.Log.Println("Warning: srno is missing for catchup request")
 	}
 
-	if _, err := strconv.ParseInt(start, 10, 64); err == nil {
-		startInt, _ := strconv.ParseInt(start, 10, 64)
-		endInt, _ := strconv.ParseInt(end, 10, 64)
+	startInt, errStart := strconv.ParseInt(start, 10, 64)
+	endInt, errEnd := strconv.ParseInt(end, 10, 64)
+	if errStart == nil && errEnd == nil {
 		start = time.UnixMilli(startInt).UTC().Format("20060102T150405")
 		end = time.UnixMilli(endInt).UTC().Format("20060102T150405")
 	}
@@ -187,9 +187,9 @@ func CatchupRenderPlayerHandler(c *fiber.Ctx) error {
 
 	startFmt := start
 	endFmt := end
-	if _, err := strconv.ParseInt(start, 10, 64); err == nil {
-		startInt, _ := strconv.ParseInt(start, 10, 64)
-		endInt, _ := strconv.ParseInt(end, 10, 64)
+	startInt, errStart := strconv.ParseInt(start, 10, 64)
+	endInt, errEnd := strconv.ParseInt(end, 10, 64)
+	if errStart == nil && errEnd == nil {
 		startFmt = time.UnixMilli(startInt).UTC().Format("20060102T150405")
 		endFmt = time.UnixMilli(endInt).UTC().Format("20060102T150405")
 	}
@@ -202,18 +202,19 @@ func CatchupRenderPlayerHandler(c *fiber.Ctx) error {
 	if err == nil && catchupResult != nil && catchupResult.IsDRM {
 		mpdURL := internalUtils.SelectQuality(qualityForDrm, catchupResult.Mpd.Bitrates.Auto, catchupResult.Mpd.Bitrates.High, catchupResult.Mpd.Bitrates.Medium, catchupResult.Mpd.Bitrates.Low)
 		if mpdURL == "" {
-			if catchupResult.Mpd.Bitrates.High != "" {
-				mpdURL = catchupResult.Mpd.Bitrates.High
-			} else if catchupResult.Mpd.Bitrates.Auto != "" {
-				mpdURL = catchupResult.Mpd.Bitrates.Auto
-			} else if catchupResult.Mpd.Bitrates.Medium != "" {
-				mpdURL = catchupResult.Mpd.Bitrates.Medium
-			} else if catchupResult.Mpd.Bitrates.Low != "" {
-				mpdURL = catchupResult.Mpd.Bitrates.Low
+			candidates := []string{
+				catchupResult.Mpd.Bitrates.High,
+				catchupResult.Mpd.Bitrates.Auto,
+				catchupResult.Mpd.Bitrates.Medium,
+				catchupResult.Mpd.Bitrates.Low,
+				catchupResult.Mpd.Result,
 			}
-		}
-		if mpdURL == "" {
-			mpdURL = catchupResult.Mpd.Result
+			for _, candidate := range candidates {
+				if candidate != "" {
+					mpdURL = candidate
+					break
+				}
+			}
 		}
 
 		if mpdURL != "" {
