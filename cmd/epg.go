@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/jiotv-go/jiotv_go/v3/pkg/epg"
-	"github.com/jiotv-go/jiotv_go/v3/pkg/utils"
 )
 
 // GenEPG generates a new epg.xml.gz file with updated EPG data by first deleting any existing epg.xml.gz file.
@@ -14,8 +13,7 @@ func GenEPG() error {
 
 	fmt.Println("Deleting existing EPG file if exists")
 
-	epgFile := utils.GetPathPrefix() + "epg.xml.gz"
-	err := os.Remove(epgFile)
+	err := os.Remove("epg.xml.gz")
 	if err != nil {
 		// If file does not exist, ignore error
 		if !os.IsNotExist(err) {
@@ -25,7 +23,7 @@ func GenEPG() error {
 
 	fmt.Println("Generating new EPG file")
 
-	err = epg.GenXMLGz(epgFile)
+	err = epg.GenXMLGz("epg.xml.gz")
 	return err
 }
 
@@ -36,8 +34,7 @@ func DeleteEPG() error {
 
 	fmt.Println("Deleting existing EPG file if exists")
 
-	epgFile := utils.GetPathPrefix() + "epg.xml.gz"
-	err := os.Remove(epgFile)
+	err := os.Remove("epg.xml.gz")
 
 	if err != nil {
 		if err == os.ErrNotExist || os.IsNotExist(err) { // Added os.IsNotExist for robustness

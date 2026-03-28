@@ -16,12 +16,6 @@ The gateway to the Home Page, where your JioTV Go adventure begins.
 
 Dive into the world of specific channels with the provided `channel_id`.
 
-### Catchup Page
-
-- **Path**: `/catchup/:channel_id`
-
-Browse past episodes (up to 7 days) for the given channel and play catchup.
-
 ### FlowPlayer IFrame Player
 
 - **Path**: `/player/:channel_id`

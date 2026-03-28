@@ -119,15 +119,6 @@ If your internet speed is low, you can use the `medium` or `low` quality.
 
 ## Catchup
 
-JioTV Go now supports 7-day catchup browsing and playback via web.
-
-- Browse episodes per channel: 
-  ```
-  http://localhost:5001/catchup/:channel_id
-  ```
-  Use `?offset=` with values from `0` (today) down to `-7` for past days.
-
-- Play a specific episode:
-  The Catchup page links to the player automatically with the correct start/end times.
+Please note that JioTV Go currently does not support catch-up functionality. If you possess the expertise to implement this feature, we welcome your contribution! Open a pull request, and we appreciate your valuable input.
 
 Enjoy the seamless integration of JioTV Go into your IPTV setup. For any queries or assistance, refer to our user-friendly documentation or connect with our community on [Telegram](/#community). Happy streaming!

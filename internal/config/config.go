@@ -3,9 +3,7 @@ package config
 import (
 	"log"
 	"os"
-	"path/filepath"
 	"reflect"
-	"strings"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
@@ -42,7 +40,6 @@ type JioTVConfig struct {
 	DefaultCategories []int `yaml:"default_categories" env:"JIOTV_DEFAULT_CATEGORIES" json:"default_categories" toml:"default_categories"`
 	// DefaultLanguages is the list of language IDs to display on the default web page. Default: []
 	DefaultLanguages []int `yaml:"default_languages" env:"JIOTV_DEFAULT_LANGUAGES" json:"default_languages" toml:"default_languages"`
-	Plugins          []string `yaml:"plugins" env:"JIOTV_PLUGINS" json:"plugins" toml:"plugins"`
 }
 
 // Cfg is the global config variable
@@ -58,72 +55,10 @@ func (c *JioTVConfig) Load(filename string) error {
 	}
 	if filename == "" {
 		log.Println("INFO: No config file found, using environment variables")
-		if err := cleanenv.ReadEnv(c); err != nil {
-			return err
-		}
-		return nil
+		return cleanenv.ReadEnv(c)
 	}
 	log.Println("INFO: Using config file:", filename)
-	if err := cleanenv.ReadConfig(filename, c); err != nil {
-		return err
-	}
-	rawCustomChannels := strings.TrimSpace(c.CustomChannelsFile)
-	if rawCustomChannels != "" {
-		log.Println("INFO: Custom channels file (raw):", rawCustomChannels)
-	}
-	c.normalizePaths(filename)
-	resolvedCustomChannels := strings.TrimSpace(c.CustomChannelsFile)
-	if resolvedCustomChannels != "" {
-		log.Println("INFO: Custom channels file (resolved):", resolvedCustomChannels)
-		log.Println("INFO: Custom channels file exists:", fileExists(resolvedCustomChannels))
-	}
-	return nil
-}
-
-func (c *JioTVConfig) normalizePaths(configFilePath string) {
-	// Normalize CustomChannelsFile
-	raw := strings.TrimSpace(c.CustomChannelsFile)
-	if raw != "" {
-		if !filepath.IsAbs(raw) {
-			if !fileExists(raw) {
-				configDir := filepath.Dir(configFilePath)
-				var relCandidates []string
-				relCandidates = append(relCandidates, raw)
-
-				rawSlash := filepath.ToSlash(raw)
-				if strings.HasPrefix(rawSlash, "configs/") && filepath.Base(configDir) == "configs" {
-					relCandidates = append(relCandidates, strings.TrimPrefix(rawSlash, "configs/"))
-				}
-
-				base := filepath.Base(raw)
-				altBase := strings.ReplaceAll(base, "custom_channels", "custom-channels")
-				if altBase != base {
-					relCandidates = append(relCandidates, altBase)
-					if strings.HasPrefix(rawSlash, "configs/") && filepath.Base(configDir) == "configs" {
-						relCandidates = append(relCandidates, strings.TrimPrefix(filepath.ToSlash(altBase), "configs/"))
-					}
-				}
-
-				for _, rel := range relCandidates {
-					rel = filepath.Clean(filepath.FromSlash(rel))
-					if rel == "" || rel == "." {
-						continue
-					}
-					candidate := filepath.Join(configDir, rel)
-					if fileExists(candidate) {
-						c.CustomChannelsFile = candidate
-						break
-					}
-				}
-			}
-		}
-	}
-
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+	return cleanenv.ReadConfig(filename, c)
 }
 
 // Get retrieves the value of the config field specified by key.
@@ -138,18 +73,6 @@ func (*JioTVConfig) Get(key string) interface{} {
 	return nil
 }
 
-func PluginEnabled(name string) bool {
-	if strings.TrimSpace(name) == "" {
-		return false
-	}
-	for _, plugin := range Cfg.Plugins {
-		if strings.EqualFold(strings.TrimSpace(plugin), name) {
-			return true
-		}
-	}
-	return false
-}
-
 // commonFileExists checks for the existence of common config
 // file names and returns the first one found. It searches
 // for config files in the following formats:
@@ -159,28 +82,10 @@ func PluginEnabled(name string) bool {
 // If no file is found, an empty string is returned.
 func commonFileExists() string {
 	commonFiles := []string{"jiotv_go.yml", "jiotv_go.yaml", "jiotv_go.toml", "jiotv_go.json", "config.json", "config.yml", "config.toml", "config.yaml"}
-
-	exePath, _ := os.Executable()
-	exeDir := filepath.Dir(exePath)
-
 	for _, filename := range commonFiles {
 		// check above common files in current directory
 		if _, err := os.Stat(filename); err == nil {
 			return filename
-		}
-		// check in configs directory
-		if _, err := os.Stat("configs/" + filename); err == nil {
-			return "configs/" + filename
-		}
-		// check in executable directory
-		exeFile := filepath.Join(exeDir, filename)
-		if _, err := os.Stat(exeFile); err == nil {
-			return exeFile
-		}
-		// check in executable directory configs
-		exeConfigFile := filepath.Join(exeDir, "configs", filename)
-		if _, err := os.Stat(exeConfigFile); err == nil {
-			return exeConfigFile
 		}
 	}
 	return ""
