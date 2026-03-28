@@ -1,4 +1,4 @@
-﻿const htmlTag = document.getElementsByTagName("html")[0];
+const htmlTag = document.getElementsByTagName("html")[0];
 
 const getCurrentTheme = () => {
   const storedTheme = getLocalStorageItem("theme");
